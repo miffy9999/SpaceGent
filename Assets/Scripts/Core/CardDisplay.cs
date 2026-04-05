@@ -18,6 +18,9 @@ public class CardDisplay : MonoBehaviour
     [Header("스프라이트 매핑 (옵션)")]
     public CardSpriteMapping spriteMapping;
 
+    [Header("카드 크기")]
+    [Range(0.1f, 3f)] public float cardScale = 1f;
+
     // 인스펙터 미연결 대비: 컴포넌트 자동 탐색
     void Awake()
     {
@@ -30,6 +33,8 @@ public class CardDisplay : MonoBehaviour
         // bgRenderer에 스프라이트가 없으면 단색 표시용 흰 픽셀 스프라이트 생성
         if (bgRenderer != null && bgRenderer.sprite == null)
             bgRenderer.sprite = MakeWhiteSprite();
+
+        transform.localScale = Vector3.one * cardScale;
     }
 
     // ---------------------------------------------------------------
