@@ -3,181 +3,192 @@ using UnityEngine;
 
 public class TrickManager : MonoBehaviour
 {
-    public DeckManager deckManager;
-    public List<CrewAgent> players = new List<CrewAgent>(); // 참여하는 플레이어들
+    // GameManager가 Start()에서 할당해 줌
+    [HideInInspector] public List<CrewAgent> players = new List<CrewAgent>();
 
     // 트릭(한 턴) 정보
     public Card.Suit leadSuit;
     public List<Card> cardsOnTable = new List<Card>();
     public List<CrewAgent> playersOnTable = new List<CrewAgent>();
 
-    private int currentPlayerIndex = 0; // 지금 누구 차례인지 (players 리스트의 인덱스)
-    private int startPlayerIndex = 0; // 이번 트릭을 처음 시작한 사람
+    private int currentPlayerIndex = 0;
 
-    void Awake()
-    {
-        if (deckManager == null)
-        {
-            deckManager = FindAnyObjectByType<DeckManager>();
-        }
-    }
-    void Start()
-    {
-        StartGame();
-    }
-
-    // 게임 시작 시 초기화
+    // ---------------------------------------------------------------
+    // GameManager.Start()에서 호출됨 (자체 Start() 없음)
+    // ---------------------------------------------------------------
     public void StartGame()
     {
-        players = deckManager.players; // DeckManager에서 플레이어 목록 가져오기
-        deckManager.DealCardsToAgents(); // 카드 분배
+        // 카드를 먼저 분배한 뒤 잠수함 4번 소지자를 함장으로 지정
+        deckManager.DealCardsToAgents();
 
-        // 게임 시작: 0번 플레이어부터 트릭 시작!
-        StartNewTrick(0);
+        int captainIndex = FindCaptainIndex();
+        Debug.Log($"[TrickManager] 함장: {players[captainIndex].name} (잠수함 4번 소지)");
+
+        StartNewTrick(captainIndex);
     }
 
-    // 새로운 트릭(한 바퀴) 시작
+    // ---------------------------------------------------------------
+    // 새로운 트릭 시작
+    // ---------------------------------------------------------------
     public void StartNewTrick(int leadingPlayerIndex)
     {
-        Debug.Log($"--- 새로운 트릭 시작! 선 플레이어: {players[leadingPlayerIndex].name} ---");
+        Debug.Log($"--- 새 트릭 시작 | 선: {players[leadingPlayerIndex].name} ---");
         cardsOnTable.Clear();
         playersOnTable.Clear();
+        leadSuit = Card.Suit.Submarine; // 미정 상태로 초기화
 
-        startPlayerIndex = leadingPlayerIndex;
         currentPlayerIndex = leadingPlayerIndex;
-
-        // 선 플레이어에게 턴 넘겨주기
         GiveTurnToPlayer(currentPlayerIndex);
     }
 
-    // 특정 플레이어의 'isMyTurn'을 켜주는 함수
-    private void GiveTurnToPlayer(int index)
-    {
-        players[index].isMyTurn = true;
-        Debug.Log($"👉 {players[index].name}의 차례입니다.");
-    }
-
-    // 💡 방금 에이전트가 카드를 내면 여기로 연락이 옵니다.
+    // ---------------------------------------------------------------
+    // 카드가 낼 때 TrickManager에 알림 (CrewAgent → 여기)
+    // ---------------------------------------------------------------
     public void OnCardPlayed(CrewAgent player, Card playedCard)
     {
         cardsOnTable.Add(playedCard);
         playersOnTable.Add(player);
 
-        // 첫 번째로 낸 카드라면 선 색상(Lead Suit) 설정
+        // 첫 카드 → 선 색상 결정 (잠수함은 선 색상이 되지 않음)
         if (cardsOnTable.Count == 1 && playedCard.suit != Card.Suit.Submarine)
         {
             leadSuit = playedCard.suit;
         }
 
-        // 모두가 카드를 냈는지 확인 (3명 기준)
+        // 4명 모두 냈으면 승자 판별
         if (cardsOnTable.Count >= players.Count)
         {
-            // 3명이 다 냈으면 승자 판별!
             DetermineTrickWinner();
         }
         else
         {
-            // 아직 다 안 냈으면 다음 사람에게 바통 터치
             currentPlayerIndex = (currentPlayerIndex + 1) % players.Count;
             GiveTurnToPlayer(currentPlayerIndex);
         }
     }
 
-    // 승자 판별
-    public void DetermineTrickWinner()
+    // ---------------------------------------------------------------
+    // 승자 판별 (버그 수정: winnerIndex를 추적해서 다음 선으로 사용)
+    // ---------------------------------------------------------------
+    private void DetermineTrickWinner()
     {
-        CrewAgent winner = playersOnTable[0];
+        int winnerIdx = 0;
         Card winningCard = cardsOnTable[0];
 
         for (int i = 1; i < cardsOnTable.Count; i++)
         {
-            Card currentCard = cardsOnTable[i];
+            Card c = cardsOnTable[i];
 
-            if (currentCard.suit == Card.Suit.Submarine && winningCard.suit != Card.Suit.Submarine)
+            bool currentIsSubmarine = c.suit == Card.Suit.Submarine;
+            bool winnerIsSubmarine  = winningCard.suit == Card.Suit.Submarine;
+
+            if (currentIsSubmarine && !winnerIsSubmarine)
             {
-                winningCard = currentCard;
-                winner = playersOnTable[i];
+                winningCard = c; winnerIdx = i;
             }
-            else if (currentCard.suit == Card.Suit.Submarine && winningCard.suit == Card.Suit.Submarine)
+            else if (currentIsSubmarine && winnerIsSubmarine)
             {
-                if (currentCard.value > winningCard.value) { winningCard = currentCard; winner = playersOnTable[i]; }
+                if (c.value > winningCard.value) { winningCard = c; winnerIdx = i; }
             }
-            else if (currentCard.suit == leadSuit && winningCard.suit == leadSuit)
+            else if (c.suit == leadSuit && winningCard.suit == leadSuit)
             {
-                if (currentCard.value > winningCard.value) { winningCard = currentCard; winner = playersOnTable[i]; }
+                if (c.value > winningCard.value) { winningCard = c; winnerIdx = i; }
             }
         }
 
-        Debug.Log($"🏆 트릭 승자: {winner.name} (이긴 카드: {winningCard.suit} {winningCard.value})");
+        CrewAgent winner = playersOnTable[winnerIdx];
+        int nextLeadIndex = players.IndexOf(winner); // ← 버그 수정: 0 하드코딩 제거
 
-        // 💡 새로 추가: 승자에게 칭찬 스티커(보상 1점) 부여!
+        Debug.Log($"트릭 승자: {winner.name} ({winningCard.suit} {winningCard.value})");
         winner.AddReward(1.0f);
 
-        // 이긴 사람이 다음 트릭의 선 플레이어가 됨
-        int winnerIndex = players.IndexOf(winner);
-
-        // 잠깐 쉬었다가(여기선 바로) 다음 트릭 시작
-        ClearTableAndStartNextTrick();
+        ClearTableAndStartNextTrick(nextLeadIndex);
     }
 
-    private void ClearTableAndStartNextTrick()
+    // ---------------------------------------------------------------
+    // 테이블 정리 후 다음 트릭 (버그 수정: 공용 centerBoard 사용)
+    // ---------------------------------------------------------------
+    private void ClearTableAndStartNextTrick(int nextLeadIndex)
     {
-        // 바닥 그래픽 지우기
-        foreach (Transform child in deckManager.players[0].centerBoard)
+        // 버그 수정: players[0].centerBoard 하드코딩 → GameManager 공용 centerBoard
+        foreach (Transform child in GameManager.Instance.centerBoard)
         {
             Destroy(child.gameObject);
         }
 
-        // 💡 새로 추가: 손패를 다 썼는지 확인 (게임 종료 조건)
+        // 손패 소진 여부로 게임 종료 판단
         if (players[0].hand.Count == 0)
         {
-            EndGame(); // 게임 오버 처리
+            EndGame();
         }
         else
         {
-            // 아직 손패가 남았다면 다음 트릭 시작 (방금 이긴 사람부터)
-            // 편의상 0번으로 고정했던 것을 승자 인덱스로 바꿔주면 완벽합니다.
-            StartNewTrick(0);
+            StartNewTrick(nextLeadIndex); // ← 버그 수정: 승자가 다음 선
         }
     }
 
-    // 💡 새로 추가: 에이전트가 낸 카드가 합법적인 규칙(Follow Suit)인지 검사합니다.
+    // ---------------------------------------------------------------
+    // 규칙 검사 (Follow Suit)
+    // ---------------------------------------------------------------
     public bool IsValidPlay(CrewAgent player, Card cardToPlay)
     {
-        // 1. 내가 첫 번째(선)로 내는 거면 무조건 합법!
         if (cardsOnTable.Count == 0) return true;
-
-        // 2. 선 색상이 아직 안정해졌거나, 내가 잠수함(조커)을 냈으면 합법!
-        if (leadSuit == Card.Suit.Submarine || cardToPlay.suit == Card.Suit.Submarine) return true;
-
-        // 3. 내가 낸 카드가 선 색상과 같으면 합법!
+        if (leadSuit == Card.Suit.Submarine) return true;
+        if (cardToPlay.suit == Card.Suit.Submarine) return true;
         if (cardToPlay.suit == leadSuit) return true;
 
-        // 4. 선 색상과 다른 걸 냈다면? -> 내 손패를 뒤져서 선 색상이 있는지 확인!
         foreach (Card c in player.hand)
         {
-            if (c.suit == leadSuit)
-            {
-                // 손패에 선 색상이 있는데 안 냈으므로 반칙!
-                return false;
-            }
+            if (c.suit == leadSuit) return false; // 선 색상 있는데 안 냄 → 반칙
         }
 
-        // 손패에 선 색상이 없어서 어쩔 수 없이 다른 걸 낸 거라면 합법!
         return true;
     }
 
+    // ---------------------------------------------------------------
+    // 게임 종료 → ML-Agents 에피소드 종료 후 새 게임
+    // ---------------------------------------------------------------
     private void EndGame()
     {
-        Debug.Log("🏁 모든 카드를 소진했습니다. 게임 종료! 새 게임을 준비합니다.");
+        Debug.Log("[TrickManager] 모든 카드 소진 → 에피소드 종료");
 
-        // 1. 모든 에이전트에게 "이번 판 끝났어! 학습해!" 라고 알림
         foreach (CrewAgent agent in players)
         {
             agent.EndEpisode();
         }
 
-        // 2. 다시 덱을 섞고 새 게임 시작 (무한 루프)
         StartGame();
     }
+
+    // ---------------------------------------------------------------
+    // 잠수함 4번 소지자 = 함장 (버그 수정: 항상 0번 고정 제거)
+    // ---------------------------------------------------------------
+    private int FindCaptainIndex()
+    {
+        for (int i = 0; i < players.Count; i++)
+        {
+            foreach (Card c in players[i].hand)
+            {
+                if (c.suit == Card.Suit.Submarine && c.value == 4)
+                    return i;
+            }
+        }
+        Debug.LogWarning("[TrickManager] 잠수함 4번을 찾지 못했습니다. 0번 플레이어가 선이 됩니다.");
+        return 0;
+    }
+
+    private void GiveTurnToPlayer(int index)
+    {
+        players[index].isMyTurn = true;
+
+        // 0번(인간)은 Update()에서 키 입력 후 RequestDecision() 호출
+        // 1~3번(AI)은 바로 RequestDecision() 호출
+        if (index != 0)
+            players[index].RequestDecision();
+
+        Debug.Log($"→ {players[index].name}의 차례");
+    }
+
+    // DeckManager는 GameManager를 통해 접근
+    private DeckManager deckManager => GameManager.Instance.deckManager;
 }
