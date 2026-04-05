@@ -54,14 +54,13 @@ public class CommunicationToken
     private RevealPosition DeterminePosition(Card card)
     {
         int sameCount = 0;
-        bool hasHigher = false, hasLower = false;
+        bool hasHigher = false;
 
         foreach (Card c in owner.hand)
         {
             if (c.suit != card.suit) continue;
             sameCount++;
             if (c.value > card.value) hasHigher = true;
-            if (c.value < card.value) hasLower  = true;
         }
 
         if (sameCount == 1) return RevealPosition.Only;
