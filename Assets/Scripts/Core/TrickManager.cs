@@ -97,10 +97,12 @@ public class TrickManager : MonoBehaviour
         }
 
         CrewAgent winner = playersOnTable[winnerIdx];
-        int nextLeadIndex = players.IndexOf(winner); // ← 버그 수정: 0 하드코딩 제거
+        int nextLeadIndex = players.IndexOf(winner);
 
         Debug.Log($"트릭 승자: {winner.name} ({winningCard.suit} {winningCard.value})");
-        winner.AddReward(1.0f);
+
+        // 보상은 MissionManager가 태스크 달성 여부로 판정 (단순 트릭 승리 보상 없음)
+        MissionManager.Instance.OnTrickResolved(winner, new List<Card>(cardsOnTable));
 
         ClearTableAndStartNextTrick(nextLeadIndex);
     }
@@ -119,6 +121,7 @@ public class TrickManager : MonoBehaviour
         // 손패 소진 여부로 게임 종료 판단
         if (players[0].hand.Count == 0)
         {
+            MissionManager.Instance.OnHandEnded();
             EndGame();
         }
         else

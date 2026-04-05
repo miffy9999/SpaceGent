@@ -20,6 +20,7 @@ public class GameManager : MonoBehaviour
     [Header("매니저 참조")]
     public DeckManager deckManager;
     public TrickManager trickManager;
+    public MissionManager missionManager;
 
     void Awake()
     {
@@ -40,7 +41,8 @@ public class GameManager : MonoBehaviour
         deckManager.players = players;
         trickManager.players = players;
 
-        // TrickManager가 Start()에서 자동 호출하지 않으므로 여기서 시작
+        // 미션 초기화 후 게임 시작
+        missionManager.InitMission();
         trickManager.StartGame();
     }
 
@@ -54,5 +56,7 @@ public class GameManager : MonoBehaviour
             Debug.LogError("[GameManager] deckManager가 비어 있습니다.");
         if (trickManager == null)
             Debug.LogError("[GameManager] trickManager가 비어 있습니다.");
+        if (missionManager == null)
+            Debug.LogError("[GameManager] missionManager가 비어 있습니다.");
     }
 }

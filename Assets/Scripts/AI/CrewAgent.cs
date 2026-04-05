@@ -135,7 +135,7 @@ public class CrewAgent : Agent
     }
 
     // ---------------------------------------------------------------
-    // 관찰 (Observation) — 총 85개
+    // 관찰 (Observation) — 총 127개
     // ---------------------------------------------------------------
     public override void CollectObservations(VectorSensor sensor)
     {
@@ -156,6 +156,15 @@ public class CrewAgent : Agent
         if (trickManager.cardsOnTable.Count > 0)
             leadObs[(int)trickManager.leadSuit] = 1f;
         foreach (float f in leadObs) sensor.AddObservation(f);
+
+        // 4. 내 태스크 정보 (42칸) — 목표 카드 원-핫 40 + 완료 1 + 실패 1
+        float[] taskObs = MissionManager.Instance.GetTaskObservation(this);
+        foreach (float f in taskObs) sensor.AddObservation(f);
+
+        // 5. 각 플레이어 남은 손패 장수 (4칸, 정규화)
+        var players = GameManager.Instance.players;
+        foreach (var p in players)
+            sensor.AddObservation(p.hand.Count / 10f);
     }
 
     // ---------------------------------------------------------------
