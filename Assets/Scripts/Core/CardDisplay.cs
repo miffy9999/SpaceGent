@@ -124,8 +124,8 @@ public class CardDisplay : MonoBehaviour
                 bgRenderer.color = Color.blue;
                 if (valueText != null) valueText.color = Color.white;
                 break;
-            case Card.Suit.White:
-                bgRenderer.color = Color.white;
+            case Card.Suit.Green:
+                bgRenderer.color = Color.green;
                 break;
             case Card.Suit.Pink:
                 bgRenderer.color = new Color(1f, 0.4f, 0.7f);
