@@ -97,3 +97,6 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# ML-Agents 자동 생성 타이머 파일
+/[Aa]ssets/ML-Agents/Timers/
