@@ -14,13 +14,12 @@ public class CrewAgent : Agent
     public GameObject cardPrefab;
     public Transform handTransform;
 
-    // centerBoard는 GameManager.Instance.centerBoard를 사용
-    // (인스펙터 할당 불필요)
-
     private List<GameObject> cardVisualObjects = new List<GameObject>();
-    private int pendingAction = -1;
+    private int pendingCardAction   = -1;
+    private int pendingCommAction   =  0; // 0=통신 안 함, 1=통신 토큰 사용
 
-    private TrickManager trickManager => GameManager.Instance.trickManager;
+    private TrickManager trickManager           => GameManager.Instance.trickManager;
+    private CommunicationManager commManager    => GameManager.Instance.communicationManager;
 
     // ---------------------------------------------------------------
     // 카드 분배 / 초기화
@@ -46,47 +45,62 @@ public class CrewAgent : Agent
 
     // ---------------------------------------------------------------
     // 키보드 입력 (인간 플레이어 / Heuristic 모드)
-    // 4인 기준: 1인당 최대 10장 → 키 1~9, 0으로 충분히 커버
+    //   숫자 1~0 : 카드 선택
+    //   Space    : 통신 토큰 사용
     // ---------------------------------------------------------------
     void Update()
     {
         if (!isMyTurn) return;
 
-        if      (Input.GetKeyDown(KeyCode.Alpha1)) pendingAction = 0;
-        else if (Input.GetKeyDown(KeyCode.Alpha2)) pendingAction = 1;
-        else if (Input.GetKeyDown(KeyCode.Alpha3)) pendingAction = 2;
-        else if (Input.GetKeyDown(KeyCode.Alpha4)) pendingAction = 3;
-        else if (Input.GetKeyDown(KeyCode.Alpha5)) pendingAction = 4;
-        else if (Input.GetKeyDown(KeyCode.Alpha6)) pendingAction = 5;
-        else if (Input.GetKeyDown(KeyCode.Alpha7)) pendingAction = 6;
-        else if (Input.GetKeyDown(KeyCode.Alpha8)) pendingAction = 7;
-        else if (Input.GetKeyDown(KeyCode.Alpha9)) pendingAction = 8;
-        else if (Input.GetKeyDown(KeyCode.Alpha0)) pendingAction = 9;
+        if      (Input.GetKeyDown(KeyCode.Alpha1)) pendingCardAction = 0;
+        else if (Input.GetKeyDown(KeyCode.Alpha2)) pendingCardAction = 1;
+        else if (Input.GetKeyDown(KeyCode.Alpha3)) pendingCardAction = 2;
+        else if (Input.GetKeyDown(KeyCode.Alpha4)) pendingCardAction = 3;
+        else if (Input.GetKeyDown(KeyCode.Alpha5)) pendingCardAction = 4;
+        else if (Input.GetKeyDown(KeyCode.Alpha6)) pendingCardAction = 5;
+        else if (Input.GetKeyDown(KeyCode.Alpha7)) pendingCardAction = 6;
+        else if (Input.GetKeyDown(KeyCode.Alpha8)) pendingCardAction = 7;
+        else if (Input.GetKeyDown(KeyCode.Alpha9)) pendingCardAction = 8;
+        else if (Input.GetKeyDown(KeyCode.Alpha0)) pendingCardAction = 9;
 
-        if (pendingAction != -1)
-        {
+        if (Input.GetKeyDown(KeyCode.Space))
+            pendingCommAction = 1;
+
+        if (pendingCardAction != -1)
             RequestDecision();
-        }
     }
 
     public override void Heuristic(in ActionBuffers actionsOut)
     {
         var discrete = actionsOut.DiscreteActions;
-        discrete[0] = pendingAction >= 0 ? pendingAction : 0;
-        pendingAction = -1;
+        discrete[0] = pendingCardAction >= 0 ? pendingCardAction : 0;
+        discrete[1] = pendingCommAction;
+        pendingCardAction = -1;
+        pendingCommAction = 0;
     }
 
     // ---------------------------------------------------------------
     // AI 행동 처리
+    // Branch[0] : 낼 카드 인덱스 (0~9)
+    // Branch[1] : 통신 토큰 사용 여부 (0=안 함, 1=사용)
     // ---------------------------------------------------------------
     public override void OnActionReceived(ActionBuffers actions)
     {
         if (!isMyTurn) return;
         if (hand.Count == 0) return;
 
-        int cardIndex = actions.DiscreteActions[0];
+        int cardIndex  = actions.DiscreteActions[0];
+        int useComm    = actions.DiscreteActions[1];
 
-        // 범위 초과 → 벌점 후 강제로 0번 카드
+        // 통신 토큰 사용 (카드를 내기 전에 처리)
+        if (useComm == 1)
+        {
+            bool success = commManager.UseToken(this);
+            if (!success)
+                AddReward(-0.1f); // 이미 사용했거나 공개할 카드 없음
+        }
+
+        // 범위 초과 행동 → 벌점 후 강제 0번 카드
         if (cardIndex < 0 || cardIndex >= hand.Count)
         {
             AddReward(-1.0f);
@@ -99,10 +113,6 @@ public class CrewAgent : Agent
         {
             AddReward(-1.0f);
             Debug.Log($"[{gameObject.name}] 규칙 위반 (벌점 -1.0)");
-        }
-        else
-        {
-            AddReward(0.1f);
         }
 
         PlayCard(cardIndex);
@@ -117,7 +127,6 @@ public class CrewAgent : Agent
         Card playedCard = hand[index];
         hand.RemoveAt(index);
 
-        // 카드 오브젝트를 공용 centerBoard로 이동
         GameObject cardObj = cardVisualObjects[index];
         cardObj.transform.SetParent(GameManager.Instance.centerBoard);
         cardObj.transform.localPosition = new Vector3(
@@ -129,42 +138,50 @@ public class CrewAgent : Agent
         cardVisualObjects.RemoveAt(index);
         RearrangeHand();
 
-        Debug.Log($"[{gameObject.name}] {playedCard.suit} {playedCard.value} 카드 제출");
-
+        Debug.Log($"[{gameObject.name}] {playedCard.suit} {playedCard.value} 제출");
         trickManager.OnCardPlayed(this, playedCard);
     }
 
     // ---------------------------------------------------------------
-    // 관찰 (Observation) — 총 127개
+    // 관찰 (Observation) — 총 171개
+    //   [0~39]    내 손패 원-핫           (40)
+    //   [40~79]   바닥 카드 원-핫          (40)
+    //   [80~84]   선 색상 원-핫            (5)
+    //   [85~126]  내 태스크 상태           (42)
+    //   [127~130] 플레이어별 남은 손패 수  (4)
+    //   [131~174] 통신 토큰 상태           (44)
     // ---------------------------------------------------------------
     public override void CollectObservations(VectorSensor sensor)
     {
-        // 1. 내 손패 (40칸)
+        // 1. 내 손패 (40)
         float[] handObs = new float[40];
         foreach (Card c in hand)
             handObs[GetCardIndex(c)] = 1f;
         foreach (float f in handObs) sensor.AddObservation(f);
 
-        // 2. 바닥 카드 (40칸)
+        // 2. 바닥 카드 (40)
         float[] tableObs = new float[40];
         foreach (Card c in trickManager.cardsOnTable)
             tableObs[GetCardIndex(c)] = 1f;
         foreach (float f in tableObs) sensor.AddObservation(f);
 
-        // 3. 선 색상 (5칸)
+        // 3. 선 색상 (5)
         float[] leadObs = new float[5];
         if (trickManager.cardsOnTable.Count > 0)
             leadObs[(int)trickManager.leadSuit] = 1f;
         foreach (float f in leadObs) sensor.AddObservation(f);
 
-        // 4. 내 태스크 정보 (42칸) — 목표 카드 원-핫 40 + 완료 1 + 실패 1
+        // 4. 내 태스크 정보 (42)
         float[] taskObs = MissionManager.Instance.GetTaskObservation(this);
         foreach (float f in taskObs) sensor.AddObservation(f);
 
-        // 5. 각 플레이어 남은 손패 장수 (4칸, 정규화)
-        var players = GameManager.Instance.players;
-        foreach (var p in players)
+        // 5. 플레이어별 남은 손패 수 (4, 정규화)
+        foreach (var p in GameManager.Instance.players)
             sensor.AddObservation(p.hand.Count / 10f);
+
+        // 6. 통신 토큰 상태 (44) — 사용 여부 4 + 공개 카드 원-핫 40
+        float[] commObs = commManager.GetObservation();
+        foreach (float f in commObs) sensor.AddObservation(f);
     }
 
     // ---------------------------------------------------------------
