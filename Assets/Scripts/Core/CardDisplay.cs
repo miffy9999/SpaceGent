@@ -59,8 +59,19 @@ public class CardDisplay : MonoBehaviour
             Sprite s = spriteMapping.Get(cardData);
             if (s != null)
             {
-                if (faceRenderer != null) { faceRenderer.sprite = s; faceRenderer.enabled = true; }
-                if (bgRenderer != null)   bgRenderer.color = Color.white;
+                // faceRenderer가 있으면 거기에, 없으면 bgRenderer에 직접 표시
+                if (faceRenderer != null)
+                {
+                    faceRenderer.sprite  = s;
+                    faceRenderer.enabled = true;
+                    if (bgRenderer != null) bgRenderer.color = Color.white;
+                }
+                else if (bgRenderer != null)
+                {
+                    bgRenderer.sprite = s;
+                    bgRenderer.color  = Color.white;
+                    if (valueText != null) valueText.gameObject.SetActive(false);
+                }
                 return;
             }
         }
