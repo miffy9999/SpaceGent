@@ -1,0 +1,315 @@
+fileFormatVersion: 2
+guid: 7583ee1b12d3cb848b29eecaf3a7f584
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -1648265040318298043
+    second: Task_Sheet_12_0
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Android
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: Task_Sheet_12_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5480220cdaf2029e0800000000000000
+      internalID: -1648265040318298043
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_12_1
+      rect:
+        serializedVersion: 2
+        x: 408
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c494403d167c3044ca9169cad0754cd7
+      internalID: -1773652804
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_12_2
+      rect:
+        serializedVersion: 2
+        x: 816
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 6c38c1bae58fd3a4fa24c3ea86912f1b
+      internalID: 654939483
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_12_3
+      rect:
+        serializedVersion: 2
+        x: 1224
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b7af524879ef5b444bac49a881150a46
+      internalID: 1537185940
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_12_4
+      rect:
+        serializedVersion: 2
+        x: 1632
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 20faf202a44c1974896d50e41069ea29
+      internalID: 1700668649
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 462d3bcd7d12aa54e8e0accca15f3469
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries:
+      - key: SpriteEditor.SliceSettings
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":2.0,"y":2.0},"gridSpriteSize":{"x":408.0,"y":584.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":1,"keepEmptyRects":false,"isAlternate":false}'
+    nameFileIdTable:
+      Task_Sheet_12_0: -1648265040318298043
+      Task_Sheet_12_1: -1773652804
+      Task_Sheet_12_10: -1489974467
+      Task_Sheet_12_11: -2036939243
+      Task_Sheet_12_12: -168511884
+      Task_Sheet_12_13: -41350939
+      Task_Sheet_12_14: 415356160
+      Task_Sheet_12_15: -505339112
+      Task_Sheet_12_16: 749976244
+      Task_Sheet_12_17: -1358513054
+      Task_Sheet_12_18: -1855082761
+      Task_Sheet_12_19: -563154393
+      Task_Sheet_12_2: 654939483
+      Task_Sheet_12_20: 815136609
+      Task_Sheet_12_21: -245865795
+      Task_Sheet_12_22: -669219186
+      Task_Sheet_12_23: 1863535146
+      Task_Sheet_12_24: 1238347968
+      Task_Sheet_12_25: -364099420
+      Task_Sheet_12_26: 1604217371
+      Task_Sheet_12_27: -1519682103
+      Task_Sheet_12_28: -993399497
+      Task_Sheet_12_29: -222986422
+      Task_Sheet_12_3: 1537185940
+      Task_Sheet_12_30: 1769030810
+      Task_Sheet_12_31: -992499369
+      Task_Sheet_12_32: 1504184979
+      Task_Sheet_12_33: -968086930
+      Task_Sheet_12_34: -264520505
+      Task_Sheet_12_35: -1656958745
+      Task_Sheet_12_36: 1363140786
+      Task_Sheet_12_37: -1137389325
+      Task_Sheet_12_38: -1040666077
+      Task_Sheet_12_39: -578931806
+      Task_Sheet_12_4: 1700668649
+      Task_Sheet_12_40: 1951324765
+      Task_Sheet_12_41: -1588983091
+      Task_Sheet_12_42: -1221015194
+      Task_Sheet_12_43: -2106690403
+      Task_Sheet_12_44: 1284138183
+      Task_Sheet_12_45: 1230579556
+      Task_Sheet_12_46: -1279414952
+      Task_Sheet_12_47: 487949041
+      Task_Sheet_12_48: 979727005
+      Task_Sheet_12_49: -1717224712
+      Task_Sheet_12_5: 92301003
+      Task_Sheet_12_50: 616908393
+      Task_Sheet_12_51: -127619061
+      Task_Sheet_12_52: -229636712
+      Task_Sheet_12_53: 84043029
+      Task_Sheet_12_54: -1322219779
+      Task_Sheet_12_55: -2028820260
+      Task_Sheet_12_56: -1242849778
+      Task_Sheet_12_57: 1577984911
+      Task_Sheet_12_58: 557105698
+      Task_Sheet_12_59: -1142353782
+      Task_Sheet_12_6: 1187305323
+      Task_Sheet_12_60: -1486234726
+      Task_Sheet_12_61: -1665701540
+      Task_Sheet_12_62: 772937093
+      Task_Sheet_12_63: 1473209107
+      Task_Sheet_12_64: -2131553582
+      Task_Sheet_12_65: -1270644217
+      Task_Sheet_12_66: -202236900
+      Task_Sheet_12_67: 1371703573
+      Task_Sheet_12_68: 1879675453
+      Task_Sheet_12_69: 1196010005
+      Task_Sheet_12_7: -877714549
+      Task_Sheet_12_8: -1978960344
+      Task_Sheet_12_9: 1404265486
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

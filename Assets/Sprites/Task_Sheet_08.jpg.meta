@@ -1,0 +1,425 @@
+fileFormatVersion: 2
+guid: b6129a5ec6447484f841e17fad3eb106
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -2939233580010965915
+    second: Task_Sheet_08_0
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Android
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: Task_Sheet_08_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 564fb87b1aeb537d0800000000000000
+      internalID: -2939233580010965915
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_08_1
+      rect:
+        serializedVersion: 2
+        x: 408
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9d19d2787682bb44a8c313901f3e076d
+      internalID: 26171585
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_08_2
+      rect:
+        serializedVersion: 2
+        x: 816
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e38ee7d1324e3534588b7c935e42c081
+      internalID: -1592644463
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_08_3
+      rect:
+        serializedVersion: 2
+        x: 1224
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 420907e2d5404b0498cd1fd7a64ab9de
+      internalID: -2035898970
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_08_4
+      rect:
+        serializedVersion: 2
+        x: 1632
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a0928267f40f87f4fa0b31c173ee576b
+      internalID: -1395095623
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_08_5
+      rect:
+        serializedVersion: 2
+        x: 2040
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 5041b1c13596fd345bf11288ace97487
+      internalID: -544973287
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_08_6
+      rect:
+        serializedVersion: 2
+        x: 2448
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 66cd4ca475e1efb449c1a25363ce052e
+      internalID: 1122975435
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_08_7
+      rect:
+        serializedVersion: 2
+        x: 2856
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b3f532cd31574b748a753f3a96260e5c
+      internalID: 1275119533
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_08_8
+      rect:
+        serializedVersion: 2
+        x: 3264
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c8b129d133ec81e40a94e6ba08716f3d
+      internalID: 566672743
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Task_Sheet_08_9
+      rect:
+        serializedVersion: 2
+        x: 3672
+        y: 3512
+        width: 408
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 1d14e6f9648a86d4baaaa4da7dfae065
+      internalID: -1079271181
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 2a3a4fb0d06ca124ba33b942ee13f5be
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries:
+      - key: SpriteEditor.SliceSettings
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":2.0,"y":2.0},"gridSpriteSize":{"x":408.0,"y":584.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":1,"keepEmptyRects":false,"isAlternate":false}'
+    nameFileIdTable:
+      Task_Sheet_08_0: -2939233580010965915
+      Task_Sheet_08_1: 26171585
+      Task_Sheet_08_10: -234096316
+      Task_Sheet_08_11: 21848247
+      Task_Sheet_08_12: 2071204450
+      Task_Sheet_08_13: 190422773
+      Task_Sheet_08_14: -225817536
+      Task_Sheet_08_15: 1880600888
+      Task_Sheet_08_16: 1923129957
+      Task_Sheet_08_17: -136380648
+      Task_Sheet_08_18: 1498476988
+      Task_Sheet_08_19: 648394698
+      Task_Sheet_08_2: -1592644463
+      Task_Sheet_08_20: -508119302
+      Task_Sheet_08_21: -2067171448
+      Task_Sheet_08_22: -995385302
+      Task_Sheet_08_23: 955707079
+      Task_Sheet_08_24: 2060455243
+      Task_Sheet_08_25: 1595274491
+      Task_Sheet_08_26: -286950469
+      Task_Sheet_08_27: -729374682
+      Task_Sheet_08_28: 1034156767
+      Task_Sheet_08_29: -1146428110
+      Task_Sheet_08_3: -2035898970
+      Task_Sheet_08_30: 163367916
+      Task_Sheet_08_31: 1620793949
+      Task_Sheet_08_32: 736501222
+      Task_Sheet_08_33: -916908839
+      Task_Sheet_08_34: -638831389
+      Task_Sheet_08_35: 669885529
+      Task_Sheet_08_36: -1376173097
+      Task_Sheet_08_37: -781395639
+      Task_Sheet_08_38: 1214477997
+      Task_Sheet_08_39: -1407595026
+      Task_Sheet_08_4: -1395095623
+      Task_Sheet_08_40: 221449048
+      Task_Sheet_08_41: -1639790887
+      Task_Sheet_08_42: -1745602862
+      Task_Sheet_08_43: 772278381
+      Task_Sheet_08_44: -1563373842
+      Task_Sheet_08_45: 1564558839
+      Task_Sheet_08_46: -699285798
+      Task_Sheet_08_47: 1537188675
+      Task_Sheet_08_48: -761570208
+      Task_Sheet_08_49: -469716432
+      Task_Sheet_08_5: -544973287
+      Task_Sheet_08_50: -1937106300
+      Task_Sheet_08_51: -1141025415
+      Task_Sheet_08_52: -410825982
+      Task_Sheet_08_53: -1135807147
+      Task_Sheet_08_54: -1883429193
+      Task_Sheet_08_55: 721259828
+      Task_Sheet_08_56: 94600612
+      Task_Sheet_08_57: -280695285
+      Task_Sheet_08_58: -1760725640
+      Task_Sheet_08_59: -422890520
+      Task_Sheet_08_6: 1122975435
+      Task_Sheet_08_60: 1509852609
+      Task_Sheet_08_61: 1102021949
+      Task_Sheet_08_62: 686313725
+      Task_Sheet_08_63: 112254627
+      Task_Sheet_08_64: 1867573203
+      Task_Sheet_08_65: -887584789
+      Task_Sheet_08_66: 704268375
+      Task_Sheet_08_67: 226065769
+      Task_Sheet_08_68: 1617232986
+      Task_Sheet_08_69: -1859727120
+      Task_Sheet_08_7: 1275119533
+      Task_Sheet_08_8: 566672743
+      Task_Sheet_08_9: -1079271181
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
