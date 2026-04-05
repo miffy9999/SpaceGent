@@ -1,5 +1,4 @@
 using UnityEngine;
-using TMPro;
 
 /// <summary>
 /// 카드 한 장의 시각을 담당한다.
@@ -13,7 +12,7 @@ public class CardDisplay : MonoBehaviour
     public SpriteRenderer faceRenderer;    // 카드 앞면 스프라이트 (옵션)
 
     [Header("텍스트")]
-    public TextMeshPro valueText;          // 카드 숫자
+    public TextMesh valueText;             // 카드 숫자 (기존 프리팹 호환)
 
     [Header("스프라이트 매핑 (옵션)")]
     public CardSpriteMapping spriteMapping;
@@ -45,6 +44,7 @@ public class CardDisplay : MonoBehaviour
             valueText.gameObject.SetActive(true);
             valueText.text  = cardData.value.ToString();
             valueText.color = Color.black;
+            valueText.fontSize = 14;
         }
 
         // 스프라이트 매핑이 있으면 스프라이트 사용
@@ -75,7 +75,9 @@ public class CardDisplay : MonoBehaviour
     private void ShowBack()
     {
         if (valueText != null)
+        {
             valueText.gameObject.SetActive(false);
+        }
 
         if (faceRenderer != null)
             faceRenderer.enabled = false;
@@ -122,7 +124,7 @@ public class CardDisplay : MonoBehaviour
                 break;
             case Card.Suit.Blue:
                 bgRenderer.color = Color.blue;
-                if (valueText != null) valueText.color = Color.white;
+                if (valueText != null) valueText.color = Color.white; // 어두운 배경에 흰 글씨
                 break;
             case Card.Suit.Green:
                 bgRenderer.color = Color.green;
