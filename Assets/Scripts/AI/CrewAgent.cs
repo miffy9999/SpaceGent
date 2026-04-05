@@ -74,7 +74,8 @@ public class CrewAgent : Agent
     {
         var discrete = actionsOut.DiscreteActions;
         discrete[0] = pendingCardAction >= 0 ? pendingCardAction : 0;
-        discrete[1] = pendingCommAction;
+        if (discrete.Length > 1)
+            discrete[1] = pendingCommAction;
         pendingCardAction = -1;
         pendingCommAction = 0;
     }
@@ -89,8 +90,8 @@ public class CrewAgent : Agent
         if (!isMyTurn) return;
         if (hand.Count == 0) return;
 
-        int cardIndex  = actions.DiscreteActions[0];
-        int useComm    = actions.DiscreteActions[1];
+        int cardIndex = actions.DiscreteActions[0];
+        int useComm   = actions.DiscreteActions.Length > 1 ? actions.DiscreteActions[1] : 0;
 
         // 통신 토큰 사용 (카드를 내기 전에 처리)
         if (useComm == 1)
