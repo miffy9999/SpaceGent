@@ -4,7 +4,12 @@
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
       "Bash(git rm:*)",
-      "Bash(ls /d/Unity/SeaAI/README*)"
+      "Bash(ls /d/Unity/SeaAI/README*)",
+      "WebSearch",
+      "WebFetch(domain:docs.unity3d.com)",
+      "Bash(claude mcp:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }
