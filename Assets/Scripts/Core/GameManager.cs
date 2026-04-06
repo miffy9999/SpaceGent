@@ -22,6 +22,7 @@ public class GameManager : MonoBehaviour
     public TrickManager trickManager;
     public MissionManager missionManager;
     public CommunicationManager communicationManager;
+    public GameUIManager uiManager;
 
     void Awake()
     {

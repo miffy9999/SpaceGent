@@ -2,14 +2,16 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 4명의 통신 토큰 상태를 보관하고,
-/// CrewAgent 관찰 벡터용 데이터를 제공한다.
+/// 통신 토큰 + 소나 토큰을 통합 관리한다.
+/// - 통신 토큰: 자기 카드를 공개
+/// - 소나 토큰: 타인 카드를 공개
 /// </summary>
 public class CommunicationManager : MonoBehaviour
 {
     public static CommunicationManager Instance { get; private set; }
 
-    private List<CommunicationToken> tokens = new List<CommunicationToken>();
+    private List<CommunicationToken> commTokens  = new List<CommunicationToken>();
+    private List<SonarToken>         sonarTokens = new List<SonarToken>();
 
     void Awake()
     {
@@ -18,62 +20,111 @@ public class CommunicationManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // 새 판 시작 시 초기화 (GameManager → 여기)
+    // 초기화
     // ---------------------------------------------------------------
     public void InitTokens()
     {
-        tokens.Clear();
+        commTokens.Clear();
+        sonarTokens.Clear();
+
         foreach (var p in GameManager.Instance.players)
-            tokens.Add(new CommunicationToken(p));
+        {
+            commTokens.Add(new CommunicationToken(p));
+            sonarTokens.Add(new SonarToken(p));
+        }
 
-        Debug.Log("[CommManager] 통신 토큰 초기화 완료");
+        Debug.Log("[TokenManager] 통신·소나 토큰 초기화 완료");
     }
 
     // ---------------------------------------------------------------
-    // 특정 플레이어가 토큰을 사용
+    // 통신 토큰 사용
     // ---------------------------------------------------------------
-    public bool UseToken(CrewAgent agent)
+    public bool UseCommToken(CrewAgent agent)
     {
-        CommunicationToken token = GetToken(agent);
-        if (token == null || token.isUsed) return false;
-        return token.TryReveal();
+        CommunicationToken t = GetCommToken(agent);
+        if (t == null || t.isUsed) return false;
+        return t.TryReveal();
     }
 
-    public bool HasUsedToken(CrewAgent agent)
+    public bool HasUsedCommToken(CrewAgent agent) => GetCommToken(agent)?.isUsed ?? false;
+
+    // ---------------------------------------------------------------
+    // 소나 토큰 사용
+    // agent: 사용자, relativeTarget: 상대적 플레이어 인덱스 (1~3)
+    // ---------------------------------------------------------------
+    public bool UseSonarToken(CrewAgent agent, int relativeTarget)
     {
-        return GetToken(agent)?.isUsed ?? false;
+        SonarToken t = GetSonarToken(agent);
+        if (t == null || t.isUsed) return false;
+
+        var players    = GameManager.Instance.players;
+        int selfIndex  = players.IndexOf(agent);
+        int targetIndex = (selfIndex + relativeTarget) % players.Count;
+        CrewAgent target = players[targetIndex];
+
+        return t.TryReveal(target);
     }
 
+    public bool HasUsedSonarToken(CrewAgent agent) => GetSonarToken(agent)?.isUsed ?? false;
+
     // ---------------------------------------------------------------
-    // 관찰 벡터용 데이터 (총 44개)
-    //   [0~3]  : 각 플레이어 토큰 사용 여부 (0/1)
-    //   [4~43] : 공개된 카드 원-핫 합산 (40칸)
+    // 관찰 벡터
     // ---------------------------------------------------------------
-    public float[] GetObservation()
+
+    // 통신 토큰 관찰 (44개)
+    //   [0~3]  : 플레이어별 사용 여부
+    //   [4~43] : 공개 카드 원-핫 OR 합산
+    public float[] GetCommObservation()
     {
         var players = GameManager.Instance.players;
         float[] obs = new float[44];
 
-        // 토큰 사용 여부
         for (int i = 0; i < players.Count; i++)
         {
-            CommunicationToken t = GetToken(players[i]);
+            CommunicationToken t = GetCommToken(players[i]);
             obs[i] = (t != null && t.isUsed) ? 1f : 0f;
         }
 
-        // 공개된 카드 원-핫 (여러 명이 공개했으면 OR 합산)
-        foreach (CommunicationToken t in tokens)
+        foreach (CommunicationToken t in commTokens)
         {
             if (!t.isUsed || t.revealedCard == null) continue;
-            int idx = 4 + GameManager.Instance.players[0].GetCardIndex(t.revealedCard);
+            int idx = 4 + players[0].GetCardIndex(t.revealedCard);
             if (idx < obs.Length) obs[idx] = 1f;
         }
 
         return obs;
     }
 
-    private CommunicationToken GetToken(CrewAgent agent)
+    // 소나 토큰 관찰 (44개)
+    //   [0~3]  : 플레이어별 사용 여부
+    //   [4~43] : 소나로 공개된 카드 원-핫 OR 합산
+    public float[] GetSonarObservation()
     {
-        return tokens.Find(t => t.owner == agent);
+        var players = GameManager.Instance.players;
+        float[] obs = new float[44];
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            SonarToken t = GetSonarToken(players[i]);
+            obs[i] = (t != null && t.isUsed) ? 1f : 0f;
+        }
+
+        foreach (SonarToken t in sonarTokens)
+        {
+            if (!t.isUsed || t.revealedCard == null) continue;
+            int idx = 4 + players[0].GetCardIndex(t.revealedCard);
+            if (idx < obs.Length) obs[idx] = 1f;
+        }
+
+        return obs;
     }
+
+    // ---------------------------------------------------------------
+    // UI용 조회
+    // ---------------------------------------------------------------
+    public CommunicationToken GetCommToken(CrewAgent agent) =>
+        commTokens.Find(t => t.owner == agent);
+
+    public SonarToken GetSonarToken(CrewAgent agent) =>
+        sonarTokens.Find(t => t.owner == agent);
 }

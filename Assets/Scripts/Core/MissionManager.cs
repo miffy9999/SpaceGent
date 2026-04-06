@@ -45,6 +45,7 @@ public class MissionManager : MonoBehaviour
         trickWinCounts.Clear();
         isFirstTrick = true;
         missionEnded = false;
+        GameManager.Instance.uiManager?.HideResult();
 
         var players = GameManager.Instance.players;
         foreach (var p in players)
@@ -312,6 +313,8 @@ public class MissionManager : MonoBehaviour
         foreach (var p in GameManager.Instance.players)
             p.AddReward(reward);
         Debug.Log($"[Mission] 미션 {(success ? "성공" : "실패")} 팀 보상 {reward}");
+
+        GameManager.Instance.uiManager?.ShowResult(success);
     }
 
     // ---------------------------------------------------------------
