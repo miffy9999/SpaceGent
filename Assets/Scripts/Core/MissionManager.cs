@@ -1,9 +1,13 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.MLAgents;
 
 /// <summary>
 /// 미션 선택 → 태스크 배분 → 매 트릭 판정 → 보상/패널티 처리.
 /// 카드 분배 이후(TrickManager.StartGame)에 InitMission()이 호출되어야 한다.
+///
+/// 커리큘럼 학습: Academy 환경 파라미터 "difficulty"(1~9)로 난이도 제어.
+/// trainer_config.yaml의 environment_parameters에서 단계적으로 증가시킨다.
 /// </summary>
 public class MissionManager : MonoBehaviour
 {
@@ -51,13 +55,17 @@ public class MissionManager : MonoBehaviour
         foreach (var p in players)
             trickWinCounts[p] = 0;
 
-        // 미션 선택
-        currentMission = database != null ? database.GetRandom() : null;
+        // 미션 선택 (커리큘럼: Academy 환경 파라미터 "difficulty" 1~9)
+        int maxDifficulty = Mathf.RoundToInt(
+            Academy.Instance.EnvironmentParameters.GetWithDefault("difficulty", 9f));
+        currentMission = database != null ? database.GetByMaxDifficulty(maxDifficulty) : null;
         if (currentMission == null)
         {
             FallbackMission(captainIndex);
             return;
         }
+
+        Debug.Log($"[Mission] 난이도 상한={maxDifficulty} → {currentMission.id} 선택");
 
         AssignTasksFromMission(currentMission, captainIndex);
     }

@@ -1,0 +1,71 @@
+behaviors:
+  CrewAgent:
+    trainer_type: ppo
+    hyperparameters:
+      batch_size: 256
+      buffer_size: 4096
+      learning_rate: 3.0e-4
+      beta: 0.01          # 엔트로피 계수 (협동게임은 탐색 중요)
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3
+      learning_rate_schedule: linear
+    network_settings:
+      normalize: false
+      hidden_units: 256
+      num_layers: 3
+      vis_encode_type: simple
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+    max_steps: 10000000
+    time_horizon: 128
+    summary_freq: 10000
+    keep_checkpoints: 5
+
+# ──────────────────────────────────────────────
+# 커리큘럼 학습
+# MissionManager.InitMission()에서
+# Academy.EnvironmentParameters.GetWithDefault("difficulty", 9)로 읽는다.
+#
+# 단계별 최대 미션 난이도:
+#   1단계: 3  (111 계열 — 태스크 합계 3 이하)
+#   2단계: 5  (123 계열)
+#   3단계: 7  (234 계열)
+#   4단계: 9  (333/344/444 계열, 전체 미션)
+#
+# 전환 기준: reward_threshold (에피소드 평균 보상) 달성 시 다음 단계로
+# ──────────────────────────────────────────────
+environment_parameters:
+  difficulty:
+    curriculum:
+      - name: Stage1_Easy
+        completion_criteria:
+          measure: reward
+          behavior: CrewAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 1.5        # 평균 보상 1.5 이상이면 다음 단계
+        value: 3
+
+      - name: Stage2_Normal
+        completion_criteria:
+          measure: reward
+          behavior: CrewAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 1.0
+        value: 5
+
+      - name: Stage3_Hard
+        completion_criteria:
+          measure: reward
+          behavior: CrewAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 0.5
+        value: 7
+
+      - name: Stage4_Full
+        value: 9

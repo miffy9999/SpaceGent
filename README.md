@@ -47,16 +47,16 @@ Assets/
 CrewAgent
 ```
 
-### 관찰 벡터 (Observation Space) — 총 127개
+### 관찰 벡터 (Observation Space) — 총 219개
 
 | 인덱스 | 크기 | 내용 |
 |--------|------|------|
 | 0 ~ 39 | 40 | 내 손패 원-핫 (카드 인덱스 기준) |
 | 40 ~ 79 | 40 | 현재 바닥에 깔린 카드 원-핫 |
-| 80 ~ 84 | 5 | 선 색상(Lead Suit) 원-핫 `[Yellow, Blue, White, Pink, Submarine]` |
-| 85 ~ 124 | 40 | 내 태스크 목표 카드 원-핫 |
-| 125 | 1 | 내 태스크 완료 여부 (0 or 1) |
-| 126 | 1 | 내 태스크 실패 여부 (0 or 1) |
+| 80 ~ 84 | 5 | 선 색상(Lead Suit) 원-핫 `[Yellow, Blue, Green, Pink, Submarine]` |
+| 85 ~ 124 | 40 | 내 WinSpecificCard 목표 카드 원-핫 (다수 태스크 합산) |
+| 125 | 1 | 완료된 태스크 수 (÷총 태스크 수 정규화) |
+| 126 | 1 | 실패한 태스크 수 (÷총 태스크 수 정규화) |
 | 127 ~ 130 | 4 | 플레이어별 남은 손패 장수 (÷10 정규화) |
 | 131 ~ 134 | 4 | 플레이어별 통신 토큰 사용 여부 (0 or 1) |
 | 135 ~ 174 | 40 | 공개된 통신 카드 원-핫 (전체 플레이어 합산) |
@@ -125,32 +125,17 @@ CrewAgent
 
 ---
 
-### 권장 trainer_config.yaml 출발점
+### trainer_config.yaml
 
-```yaml
-behaviors:
-  CrewAgent:
-    trainer_type: ppo
-    hyperparameters:
-      batch_size: 128
-      buffer_size: 2048
-      learning_rate: 3.0e-4
-      beta: 0.01          # 엔트로피 계수 (협동게임은 탐색이 중요)
-      epsilon: 0.2
-      lambd: 0.95
-      num_epoch: 3
-    network_settings:
-      normalize: false
-      hidden_units: 256
-      num_layers: 2
-    reward_signals:
-      extrinsic:
-        gamma: 0.99
-        strength: 1.0
-    max_steps: 5000000
-    time_horizon: 64
-    summary_freq: 10000
-```
+`config/trainer_config.yaml` 참조. 주요 설정:
+
+- **관찰 219개**, **Discrete 3-branch** (10 / 2 / 4)
+- `hidden_units: 256`, `num_layers: 3`
+- **커리큘럼 학습**: `difficulty` 환경 파라미터로 4단계(3→5→7→9) 난이도 자동 증가
+  - Stage1: 태스크 합 ≤ 3 (보상 1.5 달성 시 진급)
+  - Stage2: 태스크 합 ≤ 5 (보상 1.0 달성 시 진급)
+  - Stage3: 태스크 합 ≤ 7 (보상 0.5 달성 시 진급)
+  - Stage4: 전체 미션
 
 ---
 
@@ -159,14 +144,18 @@ behaviors:
 ### Unity (게임)
 1. `SampleScene` 열기
 2. `GameManager` 오브젝트 인스펙터에서 players·centerBoard·매니저 할당
-3. 각 AI 에이전트 **Behavior Parameters → Space Size: 127** 확인
+3. 각 AI 에이전트 **Behavior Parameters → Space Size: 219**, Discrete Branches 3개 (크기: 10, 2, 4) 확인
 4. Play
 
 ### Python (학습)
 ```bash
 pip install mlagents
+# 커리큘럼 학습 (권장)
 mlagents-learn config/trainer_config.yaml --run-id=crew_run_01
 # Unity에서 Play 버튼 누르면 학습 시작
+
+# 이미 학습된 모델 이어서 학습
+mlagents-learn config/trainer_config.yaml --run-id=crew_run_01 --resume
 ```
 
 ### TensorBoard 모니터링
