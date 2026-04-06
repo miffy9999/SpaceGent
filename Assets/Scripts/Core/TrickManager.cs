@@ -19,12 +19,20 @@ public class TrickManager : MonoBehaviour
     // ---------------------------------------------------------------
     public void StartGame()
     {
+        // 1. 카드 분배
         deckManager.DealCardsToAgents();
 
+        // 2. 함장 결정
         int captainIndex = FindCaptainIndex();
         Debug.Log($"[TrickManager] 함장: {players[captainIndex].name}");
 
-        // 감시 코루틴 시작 (이미 실행 중이면 재시작)
+        // 3. 미션 초기화 (손패 정보 필요하므로 카드 분배 이후)
+        MissionManager.Instance.InitMission(captainIndex);
+
+        // 4. 통신 토큰 초기화
+        GameManager.Instance.communicationManager.InitTokens();
+
+        // 5. 감시 코루틴
         if (watchdogCoroutine != null) StopCoroutine(watchdogCoroutine);
         watchdogCoroutine = StartCoroutine(TurnWatchdog());
 
@@ -149,9 +157,7 @@ public class TrickManager : MonoBehaviour
     private IEnumerator RestartAfterEpisodeEnd()
     {
         yield return null; // ML-Agents가 EndEpisode 처리할 때까지 1프레임 대기
-        GameManager.Instance.missionManager.InitMission();
-        GameManager.Instance.communicationManager.InitTokens();
-        StartGame();
+        StartGame(); // 미션·토큰 초기화는 StartGame() 내부에서 순서대로 처리
     }
 
     // ---------------------------------------------------------------

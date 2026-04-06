@@ -10,4 +10,16 @@ public class Card
         suit = s;
         value = v;
     }
+
+    // Contains(), Equals() 등이 값 기반으로 동작하도록 오버라이드
+    public override bool Equals(object obj)
+    {
+        if (obj is Card other)
+            return suit == other.suit && value == other.value;
+        return false;
+    }
+
+    public override int GetHashCode() => System.HashCode.Combine(suit, value);
+
+    public override string ToString() => $"{suit} {value}";
 }

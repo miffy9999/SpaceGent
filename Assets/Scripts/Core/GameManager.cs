@@ -42,8 +42,7 @@ public class GameManager : MonoBehaviour
         deckManager.players = players;
         trickManager.players = players;
 
-        // 미션 · 토큰 초기화 후 게임 시작
-        missionManager.InitMission();
+        // 게임 시작 (미션 초기화는 카드 분배 이후 TrickManager에서 수행)
         communicationManager.InitTokens();
         trickManager.StartGame();
     }
