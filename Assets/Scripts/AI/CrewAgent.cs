@@ -88,7 +88,13 @@ public class CrewAgent : Agent
     public override void OnActionReceived(ActionBuffers actions)
     {
         if (!isMyTurn) return;
-        if (hand.Count == 0) return;
+
+        // Fix: 손패가 비어있으면 턴 반납 (데드락 방지)
+        if (hand.Count == 0)
+        {
+            isMyTurn = false;
+            return;
+        }
 
         int cardIndex = actions.DiscreteActions[0];
         int useComm   = actions.DiscreteActions.Length > 1 ? actions.DiscreteActions[1] : 0;
@@ -154,34 +160,46 @@ public class CrewAgent : Agent
     // ---------------------------------------------------------------
     public override void CollectObservations(VectorSensor sensor)
     {
+        // 싱글턴 미준비 시 영벡터로 채워서 예외 방지
+        if (GameManager.Instance == null)
+        {
+            sensor.AddObservation(new float[175]);
+            return;
+        }
+
+        var tm = trickManager;
+
         // 1. 내 손패 (40)
         float[] handObs = new float[40];
-        foreach (Card c in hand)
-            handObs[GetCardIndex(c)] = 1f;
+        foreach (Card c in hand) handObs[GetCardIndex(c)] = 1f;
         foreach (float f in handObs) sensor.AddObservation(f);
 
         // 2. 바닥 카드 (40)
         float[] tableObs = new float[40];
-        foreach (Card c in trickManager.cardsOnTable)
-            tableObs[GetCardIndex(c)] = 1f;
+        if (tm != null)
+            foreach (Card c in tm.cardsOnTable) tableObs[GetCardIndex(c)] = 1f;
         foreach (float f in tableObs) sensor.AddObservation(f);
 
         // 3. 선 색상 (5)
         float[] leadObs = new float[5];
-        if (trickManager.cardsOnTable.Count > 0)
-            leadObs[(int)trickManager.leadSuit] = 1f;
+        if (tm != null && tm.cardsOnTable.Count > 0)
+            leadObs[(int)tm.leadSuit] = 1f;
         foreach (float f in leadObs) sensor.AddObservation(f);
 
         // 4. 내 태스크 정보 (42)
-        float[] taskObs = MissionManager.Instance.GetTaskObservation(this);
+        float[] taskObs = MissionManager.Instance != null
+            ? MissionManager.Instance.GetTaskObservation(this)
+            : new float[42];
         foreach (float f in taskObs) sensor.AddObservation(f);
 
         // 5. 플레이어별 남은 손패 수 (4, 정규화)
         foreach (var p in GameManager.Instance.players)
             sensor.AddObservation(p.hand.Count / 10f);
 
-        // 6. 통신 토큰 상태 (44) — 사용 여부 4 + 공개 카드 원-핫 40
-        float[] commObs = commManager.GetObservation();
+        // 6. 통신 토큰 상태 (44)
+        float[] commObs = commManager != null
+            ? commManager.GetObservation()
+            : new float[44];
         foreach (float f in commObs) sensor.AddObservation(f);
     }
 
