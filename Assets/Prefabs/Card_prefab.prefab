@@ -106,7 +106,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CardDisplay
   bgRenderer: {fileID: 2702266730347547319}
+  faceRenderer: {fileID: 0}
   valueText: {fileID: 2216507268005565754}
+  spriteMapping: {fileID: 11400000, guid: b2a092c55546dc649ba0c51339f7412b, type: 2}
+  cardScale: 0.5
 --- !u!1 &2676513333712831812
 GameObject:
   m_ObjectHideFlags: 0
