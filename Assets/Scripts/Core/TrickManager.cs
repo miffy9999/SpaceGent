@@ -12,6 +12,7 @@ public class TrickManager : MonoBehaviour
 
     private int currentPlayerIndex = 0;
     private Coroutine turnTimeoutCoroutine;
+    private Coroutine watchdogCoroutine;
 
     // ---------------------------------------------------------------
     // GameManager.Start()에서 호출
@@ -22,6 +23,10 @@ public class TrickManager : MonoBehaviour
 
         int captainIndex = FindCaptainIndex();
         Debug.Log($"[TrickManager] 함장: {players[captainIndex].name}");
+
+        // 감시 코루틴 시작 (이미 실행 중이면 재시작)
+        if (watchdogCoroutine != null) StopCoroutine(watchdogCoroutine);
+        watchdogCoroutine = StartCoroutine(TurnWatchdog());
 
         StartNewTrick(captainIndex);
     }
@@ -45,7 +50,6 @@ public class TrickManager : MonoBehaviour
     // ---------------------------------------------------------------
     public void OnCardPlayed(CrewAgent player, Card playedCard)
     {
-        // 이미 제출한 플레이어가 중복 제출하는 경우 무시
         if (playersOnTable.Contains(player))
         {
             Debug.LogWarning($"[TrickManager] {player.name} 중복 제출 무시");
@@ -58,10 +62,20 @@ public class TrickManager : MonoBehaviour
         if (cardsOnTable.Count == 1 && playedCard.suit != Card.Suit.Submarine)
             leadSuit = playedCard.suit;
 
-        if (cardsOnTable.Count >= players.Count)
-            DetermineTrickWinner();
-        else
+        try
         {
+            if (cardsOnTable.Count >= players.Count)
+                DetermineTrickWinner();
+            else
+            {
+                currentPlayerIndex = (currentPlayerIndex + 1) % players.Count;
+                GiveTurnToPlayer(currentPlayerIndex);
+            }
+        }
+        catch (System.Exception e)
+        {
+            // 내부 예외로 턴이 끊기는 것을 방지 — 강제로 다음 플레이어에게 턴 부여
+            Debug.LogError($"[TrickManager] OnCardPlayed 예외 → 턴 강제 복구\n{e}");
             currentPlayerIndex = (currentPlayerIndex + 1) % players.Count;
             GiveTurnToPlayer(currentPlayerIndex);
         }
@@ -123,11 +137,8 @@ public class TrickManager : MonoBehaviour
     {
         Debug.Log("[TrickManager] 에피소드 종료");
 
-        if (turnTimeoutCoroutine != null)
-        {
-            StopCoroutine(turnTimeoutCoroutine);
-            turnTimeoutCoroutine = null;
-        }
+        if (turnTimeoutCoroutine != null) { StopCoroutine(turnTimeoutCoroutine); turnTimeoutCoroutine = null; }
+        if (watchdogCoroutine    != null) { StopCoroutine(watchdogCoroutine);    watchdogCoroutine    = null; }
 
         foreach (CrewAgent agent in players)
             agent.EndEpisode();
@@ -170,6 +181,25 @@ public class TrickManager : MonoBehaviour
         {
             Debug.LogWarning($"[TrickManager] {players[index].name} 5초 타임아웃 → RequestDecision 재요청");
             players[index].RequestDecision();
+        }
+    }
+
+    // 아무도 턴을 갖지 않으면 currentPlayerIndex로 강제 복구
+    private IEnumerator TurnWatchdog()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(3f);
+
+            bool anyoneHasTurn = false;
+            foreach (var p in players)
+                if (p.isMyTurn) { anyoneHasTurn = true; break; }
+
+            if (!anyoneHasTurn)
+            {
+                Debug.LogWarning($"[Watchdog] 턴 소유자 없음 → {players[currentPlayerIndex].name} 강제 복구");
+                GiveTurnToPlayer(currentPlayerIndex);
+            }
         }
     }
 
