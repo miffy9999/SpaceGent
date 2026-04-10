@@ -1,5 +1,12 @@
 # SeaAI — The Crew: Deep Sea (Unity 6.3)
 
+> **팀원 최초 설정 필수**: 이 프로젝트는 Git LFS를 사용합니다.
+> ```bash
+> git lfs install   # 1회만
+> git clone https://github.com/miffy9999/Divergent.git
+> ```
+> Git LFS 없이 clone하면 폰트/에셋 파일이 깨집니다.
+
 4인 협동 트릭 테이킹 카드 게임. [The Crew: 심해 탐험](https://boardgamegeek.com/boardgame/324856/the-crew-mission-deep-sea) 룰을 기반으로 Unity ML-Agents AI와 BGA(Board Game Arena) 스타일 UI를 구현한 프로젝트.
 
 ---
