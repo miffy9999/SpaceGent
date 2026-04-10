@@ -24,6 +24,9 @@ public class GameManager : MonoBehaviour
     public CommunicationManager communicationManager;
     public GameUIManager uiManager;
 
+    [Header("카드 스프라이트 매핑")]
+    public CardSpriteMapping cardSpriteMapping;
+
     void Awake()
     {
         // 싱글턴 보장

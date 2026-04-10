@@ -6,11 +6,14 @@ public class TrickManager : MonoBehaviour
 {
     [HideInInspector] public List<CrewAgent> players = new List<CrewAgent>();
 
+    public GamePhase currentPhase { get; private set; } = GamePhase.Setup;
+
     public Card.Suit leadSuit;
     public List<Card> cardsOnTable   = new List<Card>();
     public List<CrewAgent> playersOnTable = new List<CrewAgent>();
 
     private int currentPlayerIndex = 0;
+    private int captainIndex       = 0;
     private Coroutine turnTimeoutCoroutine;
     private Coroutine watchdogCoroutine;
 
@@ -19,23 +22,33 @@ public class TrickManager : MonoBehaviour
     // ---------------------------------------------------------------
     public void StartGame()
     {
+        currentPhase = GamePhase.Setup;
+
         // 1. 카드 분배
         deckManager.DealCardsToAgents();
 
         // 2. 함장 결정
-        int captainIndex = FindCaptainIndex();
+        captainIndex = FindCaptainIndex();
         Debug.Log($"[TrickManager] 함장: {players[captainIndex].name}");
 
-        // 3. 미션 초기화 (손패 정보 필요하므로 카드 분배 이후)
-        MissionManager.Instance.InitMission(captainIndex);
-
-        // 4. 통신 토큰 초기화
+        // 3. 통신 토큰 초기화
         GameManager.Instance.communicationManager.InitTokens();
 
-        // 5. 감시 코루틴
+        // 4. 감시 코루틴
         if (watchdogCoroutine != null) StopCoroutine(watchdogCoroutine);
         watchdogCoroutine = StartCoroutine(TurnWatchdog());
 
+        // 5. 태스크 선택 단계 진입 (BGA 방식: 플레이어가 직접 선택)
+        currentPhase = GamePhase.TaskSelection;
+        MissionManager.Instance.StartTaskSelectionPhase(captainIndex);
+    }
+
+    // ---------------------------------------------------------------
+    // 태스크 선택 완료 후 MissionManager에서 호출
+    // ---------------------------------------------------------------
+    public void StartPlaying()
+    {
+        currentPhase = GamePhase.Playing;
         StartNewTrick(captainIndex);
     }
 
@@ -131,6 +144,11 @@ public class TrickManager : MonoBehaviour
             MissionManager.Instance.OnHandEnded();
             EndGame();
         }
+        else if (MissionManager.Instance.HasMissionEnded)
+        {
+            // 트릭 도중 미션 실패 확정 → 남은 트릭 없이 즉시 에피소드 종료
+            EndGame();
+        }
         else
         {
             StartNewTrick(nextLeadIndex);
@@ -156,8 +174,8 @@ public class TrickManager : MonoBehaviour
 
     private IEnumerator RestartAfterEpisodeEnd()
     {
-        yield return null; // ML-Agents가 EndEpisode 처리할 때까지 1프레임 대기
-        StartGame(); // 미션·토큰 초기화는 StartGame() 내부에서 순서대로 처리
+        yield return new WaitForSeconds(1.5f); // 결과 패널 확인 후 재시작
+        StartGame();
     }
 
     // ---------------------------------------------------------------

@@ -4,10 +4,8 @@ using Unity.MLAgents;
 
 /// <summary>
 /// 미션 선택 → 태스크 배분 → 매 트릭 판정 → 보상/패널티 처리.
-/// 카드 분배 이후(TrickManager.StartGame)에 InitMission()이 호출되어야 한다.
-///
-/// 커리큘럼 학습: Academy 환경 파라미터 "difficulty"(1~9)로 난이도 제어.
-/// trainer_config.yaml의 environment_parameters에서 단계적으로 증가시킨다.
+/// BGA 방식: StartTaskSelectionPhase()로 태스크 풀을 생성하고,
+/// 함장 왼쪽부터 시계 방향으로 플레이어가 하나씩 태스크를 선택한다.
 /// </summary>
 public class MissionManager : MonoBehaviour
 {
@@ -19,14 +17,22 @@ public class MissionManager : MonoBehaviour
     // 현재 진행 중인 미션
     public Mission currentMission { get; private set; }
 
-    // 이번 판의 태스크 목록
+    // 이번 판의 확정된 태스크 목록 (배정 완료)
     public List<TaskCard> tasks = new List<TaskCard>();
+
+    // 태스크 선택 풀 (아직 배정되지 않은 태스크들)
+    public List<TaskCard> taskPool = new List<TaskCard>();
+
+    // 선택 순서 (플레이어 인덱스 목록, 함장+1부터 시계방향)
+    private List<int> selectionOrder = new List<int>();
+    private int selectionCursor = 0;
 
     // 플레이어별 이긴 트릭 수
     private Dictionary<CrewAgent, int> trickWinCounts = new Dictionary<CrewAgent, int>();
 
-    private bool isFirstTrick  = true;
-    private bool missionEnded  = false; // 중복 종료 방지
+    private bool isFirstTrick = true;
+    private bool missionEnded = false;
+    public bool HasMissionEnded => missionEnded;
 
     // 보상 상수
     private const float RewardTaskComplete = 1.0f;
@@ -41,11 +47,14 @@ public class MissionManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // 미션 초기화 — 반드시 카드 분배(DealCardsToAgents) 이후에 호출
+    // [BGA 방식] 태스크 선택 단계 시작
+    //   함장+1부터 시계방향으로 플레이어가 태스크 풀에서 하나씩 선택.
+    //   AI는 자동 선택, 인간은 UI 클릭으로 선택.
     // ---------------------------------------------------------------
-    public void InitMission(int captainIndex)
+    public void StartTaskSelectionPhase(int captainIndex)
     {
         tasks.Clear();
+        taskPool.Clear();
         trickWinCounts.Clear();
         isFirstTrick = true;
         missionEnded = false;
@@ -55,160 +64,160 @@ public class MissionManager : MonoBehaviour
         foreach (var p in players)
             trickWinCounts[p] = 0;
 
-        // 미션 선택 (커리큘럼: Academy 환경 파라미터 "difficulty" 1~9)
+        // 미션 선택 (커리큘럼)
         int maxDifficulty = Mathf.RoundToInt(
             Academy.Instance.EnvironmentParameters.GetWithDefault("difficulty", 9f));
         currentMission = database != null ? database.GetByMaxDifficulty(maxDifficulty) : null;
-        if (currentMission == null)
+
+        // 태스크 풀 생성 (미배정)
+        if (currentMission != null)
         {
-            FallbackMission(captainIndex);
-            return;
+            Debug.Log($"[Mission] 난이도 상한={maxDifficulty} → {currentMission.id} 선택");
+            GenerateTaskPool(currentMission, captainIndex);
+        }
+        else
+        {
+            GenerateFallbackPool(captainIndex);
         }
 
-        Debug.Log($"[Mission] 난이도 상한={maxDifficulty} → {currentMission.id} 선택");
+        // 선택 순서: 함장+1부터 시계방향 (함장 제외)
+        selectionOrder.Clear();
+        for (int i = 1; i < players.Count; i++)
+            selectionOrder.Add((captainIndex + i) % players.Count);
+        selectionCursor = 0;
 
-        AssignTasksFromMission(currentMission, captainIndex);
+        Debug.Log($"[Mission] 태스크 풀 {taskPool.Count}개 생성, 선택 시작");
+
+        // UI 표시 후 AI 자동 선택 진행
+        GameManager.Instance.uiManager?.ShowTaskSelection();
+        AdvanceUntilHumanOrDone();
     }
 
     // ---------------------------------------------------------------
-    // 미션 정의대로 태스크 배분
-    // 함장(captainIndex)은 제외, 나머지 3명에게 taskCounts만큼 배정
+    // 태스크 풀 생성 (미배정 상태)
     // ---------------------------------------------------------------
-    private void AssignTasksFromMission(Mission mission, int captainIndex)
-    {
-        var players = GameManager.Instance.players;
-
-        // 비-함장 플레이어 목록
-        List<CrewAgent> nonCaptains = new List<CrewAgent>();
-        for (int i = 0; i < players.Count; i++)
-            if (i != captainIndex) nonCaptains.Add(players[i]);
-
-        // taskCounts 배열을 셔플해서 누가 몇 개를 받을지 랜덤화
-        int[] counts = (int[])mission.taskCounts.Clone();
-        ShuffleArray(counts);
-
-        for (int i = 0; i < nonCaptains.Count && i < counts.Length; i++)
-            GenerateTasksForPlayer(nonCaptains[i], counts[i]);
-
-        LogTaskSummary();
-    }
-
-    // ---------------------------------------------------------------
-    // 플레이어 1명에게 count개 태스크 생성
-    // ---------------------------------------------------------------
-    private void GenerateTasksForPlayer(CrewAgent player, int count)
-    {
-        // 이미 배정된 태스크들의 타겟 카드 집합 (중복 방지)
-        HashSet<Card> usedCards = new HashSet<Card>();
-        foreach (var t in tasks)
-            if (t.type == TaskCard.TaskType.WinSpecificCard && t.targetCard != null)
-                usedCards.Add(t.targetCard);
-
-        for (int i = 0; i < count; i++)
-        {
-            TaskCard task = CreateTask(player, usedCards);
-            if (task == null) break;
-            task.assignedTo = player;
-            tasks.Add(task);
-
-            if (task.type == TaskCard.TaskType.WinSpecificCard)
-                usedCards.Add(task.targetCard);
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // 태스크 하나 생성
-    // WinSpecificCard는 해당 플레이어 손패 카드를 우선 선택
-    // ---------------------------------------------------------------
-    private TaskCard CreateTask(CrewAgent player, HashSet<Card> usedCards)
-    {
-        // 태스크 타입 가중치: WinSpecificCard 60%, WinTrickCount 20%, WinFirst 10%, WinNone 10%
-        float r = Random.value;
-        TaskCard.TaskType type = r < 0.6f ? TaskCard.TaskType.WinSpecificCard
-                               : r < 0.8f ? TaskCard.TaskType.WinTrickCount
-                               : r < 0.9f ? TaskCard.TaskType.WinFirst
-                                          : TaskCard.TaskType.WinNone;
-
-        // WinFirst / WinNone은 같은 타입을 중복 배정하지 않음
-        if (type == TaskCard.TaskType.WinFirst && tasks.Exists(t => t.type == TaskCard.TaskType.WinFirst))
-            type = TaskCard.TaskType.WinSpecificCard;
-        if (type == TaskCard.TaskType.WinNone && tasks.Exists(t => t.assignedTo == player && t.type == TaskCard.TaskType.WinNone))
-            type = TaskCard.TaskType.WinSpecificCard;
-
-        switch (type)
-        {
-            case TaskCard.TaskType.WinSpecificCard:
-            {
-                // 1순위: 해당 플레이어 손패 중 미사용 카드
-                Card target = PickCardFromHand(player.hand, usedCards);
-
-                // 2순위: 전체 카드 풀에서 랜덤
-                if (target == null) target = PickCardFromPool(usedCards);
-                if (target == null) return null;
-
-                return TaskCard.SpecificCard(target);
-            }
-
-            case TaskCard.TaskType.WinTrickCount:
-            {
-                // 1~3회 (손패 10장 기준)
-                int count = Random.Range(1, 4);
-                return TaskCard.TrickCount(count);
-            }
-
-            case TaskCard.TaskType.WinFirst:
-                return TaskCard.First();
-
-            case TaskCard.TaskType.WinNone:
-                return TaskCard.None();
-
-            default:
-                return null;
-        }
-    }
-
-    // 손패에서 미사용 카드 선택 (잠수함 제외)
-    private Card PickCardFromHand(List<Card> hand, HashSet<Card> used)
-    {
-        List<Card> available = hand.FindAll(c => c.suit != Card.Suit.Submarine && !used.Contains(c));
-        if (available.Count == 0) return null;
-        return available[Random.Range(0, available.Count)];
-    }
-
-    // 전체 색상 카드 풀에서 미사용 카드 선택
-    private Card PickCardFromPool(HashSet<Card> used)
-    {
-        List<Card> pool = new List<Card>();
-        for (int s = 0; s < 4; s++)
-            for (int v = 1; v <= 9; v++)
-            {
-                Card c = new Card((Card.Suit)s, v);
-                if (!used.Contains(c)) pool.Add(c);
-            }
-        if (pool.Count == 0) return null;
-        return pool[Random.Range(0, pool.Count)];
-    }
-
-    // MissionDatabase 없을 때 폴백: 각자 1개씩 WinSpecificCard
-    private void FallbackMission(int captainIndex)
+    private void GenerateTaskPool(Mission mission, int captainIndex)
     {
         var players = GameManager.Instance.players;
         HashSet<Card> used = new HashSet<Card>();
 
-        for (int i = 0; i < players.Count; i++)
+        // 미션이 지정한 총 태스크 수만큼 풀 생성
+        int total = mission.TotalTaskCount;
+        for (int i = 0; i < total; i++)
         {
-            if (i == captainIndex) continue;
-            Card target = PickCardFromHand(players[i].hand, used)
-                       ?? PickCardFromPool(used);
-            if (target == null) continue;
+            // 태스크 카드를 생성할 때 손패를 참고하기 위해 비-함장 플레이어 순환
+            int pIdx = (captainIndex + 1 + (i % (players.Count - 1))) % players.Count;
+            TaskCard task = CreateUnassignedTask(players[pIdx], used);
+            if (task == null) break;
+            taskPool.Add(task);
+            if (task.type == TaskCard.TaskType.WinSpecificCard && task.targetCard != null)
+                used.Add(task.targetCard);
+        }
+    }
 
-            TaskCard task = TaskCard.SpecificCard(target);
-            task.assignedTo = players[i];
-            tasks.Add(task);
-            used.Add(target);
+    private void GenerateFallbackPool(int captainIndex)
+    {
+        var players = GameManager.Instance.players;
+        HashSet<Card> used = new HashSet<Card>();
+
+        // 비-함장 3명에게 1개씩, 총 3개
+        for (int i = 1; i < players.Count; i++)
+        {
+            int pIdx = (captainIndex + i) % players.Count;
+            TaskCard task = CreateUnassignedTask(players[pIdx], used);
+            if (task == null) continue;
+            taskPool.Add(task);
+            if (task.type == TaskCard.TaskType.WinSpecificCard && task.targetCard != null)
+                used.Add(task.targetCard);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // 현재 선택 차례인 플레이어
+    // ---------------------------------------------------------------
+    public CrewAgent GetCurrentPickingPlayer()
+    {
+        if (taskPool.Count == 0) return null;
+        if (selectionOrder.Count == 0) return null;
+        int idx = selectionOrder[selectionCursor % selectionOrder.Count];
+        return GameManager.Instance.players[idx];
+    }
+
+    // ---------------------------------------------------------------
+    // 인간 플레이어가 태스크 풀 인덱스를 선택
+    // ---------------------------------------------------------------
+    public void HumanPickTask(int poolIndex)
+    {
+        var human = GameManager.Instance.players[0];
+        if (GetCurrentPickingPlayer() != human)
+        {
+            Debug.LogWarning("[Mission] 인간의 선택 차례가 아닙니다.");
+            return;
+        }
+        if (poolIndex < 0 || poolIndex >= taskPool.Count) return;
+
+        AssignTask(poolIndex, human);
+        AdvanceSelection();
+    }
+
+    // ---------------------------------------------------------------
+    // 내부: 태스크 배정 + 풀에서 제거
+    // ---------------------------------------------------------------
+    private void AssignTask(int poolIndex, CrewAgent player)
+    {
+        TaskCard task = taskPool[poolIndex];
+        task.assignedTo = player;
+        tasks.Add(task);
+        taskPool.RemoveAt(poolIndex);
+        Debug.Log($"[Mission] {player.name} → {task} 선택");
+    }
+
+    // ---------------------------------------------------------------
+    // 다음 선택자로 이동; AI면 자동 선택, 모두 완료면 게임 시작
+    // ---------------------------------------------------------------
+    private void AdvanceSelection()
+    {
+        selectionCursor++;
+        AdvanceUntilHumanOrDone();
+    }
+
+    private void AdvanceUntilHumanOrDone()
+    {
+        while (taskPool.Count > 0)
+        {
+            var current = GetCurrentPickingPlayer();
+            if (current == null) break;
+
+            // 인간 플레이어 차례 → UI 갱신 후 대기
+            if (current == GameManager.Instance.players[0])
+            {
+                GameManager.Instance.uiManager?.RefreshTaskSelection();
+                return;
+            }
+
+            // AI 자동 선택
+            int randIdx = Random.Range(0, taskPool.Count);
+            AssignTask(randIdx, current);
+            selectionCursor++;
         }
 
+        // 풀이 비었으면 선택 완료
+        CompleteTaskSelection();
+    }
+
+    private void CompleteTaskSelection()
+    {
         LogTaskSummary();
+        GameManager.Instance.uiManager?.HideTaskSelection();
+        GameManager.Instance.trickManager.StartPlaying();
+    }
+
+    // ---------------------------------------------------------------
+    // (레거시) 자동 배분 — 더 이상 사용하지 않지만 호환성 유지
+    // ---------------------------------------------------------------
+    public void InitMission(int captainIndex)
+    {
+        StartTaskSelectionPhase(captainIndex);
     }
 
     // ---------------------------------------------------------------
@@ -227,7 +236,6 @@ public class MissionManager : MonoBehaviour
             switch (task.type)
             {
                 case TaskCard.TaskType.WinSpecificCard:
-                    // Card.Equals 오버라이드로 값 비교 동작
                     if (trickCards.Contains(task.targetCard))
                     {
                         if (winner == task.assignedTo) CompleteTask(task);
@@ -252,7 +260,6 @@ public class MissionManager : MonoBehaviour
 
         isFirstTrick = false;
 
-        // 태스크 하나라도 실패하면 즉시 패널티 (게임은 계속)
         if (!missionEnded && IsMissionFailed())
         {
             missionEnded = true;
@@ -261,11 +268,10 @@ public class MissionManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // 핸드 종료 시 최종 판정 (TrickManager에서 호출)
+    // 핸드 종료 시 최종 판정
     // ---------------------------------------------------------------
     public void OnHandEnded()
     {
-        // WinTrickCount, WinNone 최종 판정
         foreach (TaskCard task in tasks)
         {
             if (task.isCompleted || task.isFailed) continue;
@@ -280,12 +286,10 @@ public class MissionManager : MonoBehaviour
                     break;
 
                 case TaskCard.TaskType.WinNone:
-                    // 한 번도 트릭을 안 이겼으면 완료
                     CompleteTask(task);
                     break;
 
                 case TaskCard.TaskType.WinSpecificCard:
-                    // 핸드가 끝났는데 아직 미완료면 실패
                     FailTask(task);
                     break;
             }
@@ -321,7 +325,6 @@ public class MissionManager : MonoBehaviour
         foreach (var p in GameManager.Instance.players)
             p.AddReward(reward);
         Debug.Log($"[Mission] 미션 {(success ? "성공" : "실패")} 팀 보상 {reward}");
-
         GameManager.Instance.uiManager?.ShowResult(success);
     }
 
@@ -341,10 +344,7 @@ public class MissionManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // 관찰 벡터 (42개) — 다수 태스크 대응
-    //   [0~39] : 내 모든 WinSpecificCard 목표 카드 원-핫 OR 합산
-    //   [40]   : 완료된 태스크 수 (정규화)
-    //   [41]   : 실패한 태스크 수 (정규화)
+    // 관찰 벡터 (42개)
     // ---------------------------------------------------------------
     public float[] GetTaskObservation(CrewAgent agent)
     {
@@ -373,18 +373,61 @@ public class MissionManager : MonoBehaviour
     // ---------------------------------------------------------------
     // 유틸
     // ---------------------------------------------------------------
+    private TaskCard CreateUnassignedTask(CrewAgent refPlayer, HashSet<Card> used)
+    {
+        float r = Random.value;
+        TaskCard.TaskType type = r < 0.6f ? TaskCard.TaskType.WinSpecificCard
+                               : r < 0.8f ? TaskCard.TaskType.WinTrickCount
+                               : r < 0.9f ? TaskCard.TaskType.WinFirst
+                                          : TaskCard.TaskType.WinNone;
+
+        // 중복 방지
+        if (type == TaskCard.TaskType.WinFirst && taskPool.Exists(t => t.type == TaskCard.TaskType.WinFirst))
+            type = TaskCard.TaskType.WinSpecificCard;
+
+        switch (type)
+        {
+            case TaskCard.TaskType.WinSpecificCard:
+            {
+                Card target = PickCardFromHand(refPlayer.hand, used)
+                           ?? PickCardFromPool(used);
+                if (target == null) return null;
+                return TaskCard.SpecificCard(target);
+            }
+            case TaskCard.TaskType.WinTrickCount:
+                return TaskCard.TrickCount(Random.Range(1, 4));
+            case TaskCard.TaskType.WinFirst:
+                return TaskCard.First();
+            case TaskCard.TaskType.WinNone:
+                return TaskCard.None();
+            default:
+                return null;
+        }
+    }
+
+    private Card PickCardFromHand(List<Card> hand, HashSet<Card> used)
+    {
+        List<Card> available = hand.FindAll(c => c.suit != Card.Suit.Submarine && !used.Contains(c));
+        if (available.Count == 0) return null;
+        return available[Random.Range(0, available.Count)];
+    }
+
+    private Card PickCardFromPool(HashSet<Card> used)
+    {
+        List<Card> pool = new List<Card>();
+        for (int s = 0; s < 4; s++)
+            for (int v = 1; v <= 9; v++)
+            {
+                Card c = new Card((Card.Suit)s, v);
+                if (!used.Contains(c)) pool.Add(c);
+            }
+        if (pool.Count == 0) return null;
+        return pool[Random.Range(0, pool.Count)];
+    }
+
     private void LogTaskSummary()
     {
         foreach (var t in tasks)
             Debug.Log($"[Mission] {t.assignedTo.name} → {t}");
-    }
-
-    private void ShuffleArray(int[] arr)
-    {
-        for (int i = 0; i < arr.Length; i++)
-        {
-            int r = Random.Range(i, arr.Length);
-            (arr[i], arr[r]) = (arr[r], arr[i]);
-        }
     }
 }

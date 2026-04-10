@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
@@ -18,6 +19,14 @@ public class CrewAgent : Agent
     private int pendingCardAction  = -1;
     private int pendingCommAction  =  0; // 0=안 함, 1=통신 토큰
     private int pendingSonarTarget =  0; // 0=안 함, 1~3=상대 플레이어 상대 인덱스
+
+    /// <summary>UI 손패 버튼 클릭 시 호출 (인간 플레이어 전용)</summary>
+    public void SelectCard(int index)
+    {
+        if (!isMyTurn || index < 0 || index >= hand.Count) return;
+        pendingCardAction = index;
+        RequestDecision();
+    }
 
     private TrickManager       trickManager => GameManager.Instance.trickManager;
     private CommunicationManager commManager => GameManager.Instance.communicationManager;
@@ -52,21 +61,24 @@ public class CrewAgent : Agent
     {
         if (!isMyTurn) return;
 
-        if      (Input.GetKeyDown(KeyCode.Alpha1)) pendingCardAction = 0;
-        else if (Input.GetKeyDown(KeyCode.Alpha2)) pendingCardAction = 1;
-        else if (Input.GetKeyDown(KeyCode.Alpha3)) pendingCardAction = 2;
-        else if (Input.GetKeyDown(KeyCode.Alpha4)) pendingCardAction = 3;
-        else if (Input.GetKeyDown(KeyCode.Alpha5)) pendingCardAction = 4;
-        else if (Input.GetKeyDown(KeyCode.Alpha6)) pendingCardAction = 5;
-        else if (Input.GetKeyDown(KeyCode.Alpha7)) pendingCardAction = 6;
-        else if (Input.GetKeyDown(KeyCode.Alpha8)) pendingCardAction = 7;
-        else if (Input.GetKeyDown(KeyCode.Alpha9)) pendingCardAction = 8;
-        else if (Input.GetKeyDown(KeyCode.Alpha0)) pendingCardAction = 9;
+        var kb = Keyboard.current;
+        if (kb == null) return;
 
-        if (Input.GetKeyDown(KeyCode.Space)) pendingCommAction  = 1;
-        if (Input.GetKeyDown(KeyCode.Z))     pendingSonarTarget = 1;
-        if (Input.GetKeyDown(KeyCode.X))     pendingSonarTarget = 2;
-        if (Input.GetKeyDown(KeyCode.C))     pendingSonarTarget = 3;
+        if      (kb.digit1Key.wasPressedThisFrame) pendingCardAction = 0;
+        else if (kb.digit2Key.wasPressedThisFrame) pendingCardAction = 1;
+        else if (kb.digit3Key.wasPressedThisFrame) pendingCardAction = 2;
+        else if (kb.digit4Key.wasPressedThisFrame) pendingCardAction = 3;
+        else if (kb.digit5Key.wasPressedThisFrame) pendingCardAction = 4;
+        else if (kb.digit6Key.wasPressedThisFrame) pendingCardAction = 5;
+        else if (kb.digit7Key.wasPressedThisFrame) pendingCardAction = 6;
+        else if (kb.digit8Key.wasPressedThisFrame) pendingCardAction = 7;
+        else if (kb.digit9Key.wasPressedThisFrame) pendingCardAction = 8;
+        else if (kb.digit0Key.wasPressedThisFrame) pendingCardAction = 9;
+
+        if (kb.spaceKey.wasPressedThisFrame) pendingCommAction  = 1;
+        if (kb.zKey.wasPressedThisFrame)     pendingSonarTarget = 1;
+        if (kb.xKey.wasPressedThisFrame)     pendingSonarTarget = 2;
+        if (kb.cKey.wasPressedThisFrame)     pendingSonarTarget = 3;
 
         if (pendingCardAction != -1)
             RequestDecision();
