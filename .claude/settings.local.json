@@ -25,7 +25,10 @@
       "mcp__UnityMCP__execute_code",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" -H \"X-API-Key: seaai123\" http://127.0.0.1:8080/mcp)",
       "Bash(git push:*)",
-      "Bash(git lfs:*)"
+      "Bash(git lfs:*)",
+      "mcp__UnityMCP__manage_gameobject",
+      "Bash(sort -t'-' -k2)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
