@@ -80,11 +80,14 @@ public class MissionManager : MonoBehaviour
             GenerateFallbackPool(captainIndex);
         }
 
-        // 선택 순서: 함장+1부터 시계방향 (함장 제외)
+        // 실제 딥 씨 크루 규칙: 함장부터 시계방향으로 모든 플레이어가 선택 (함장 포함)
         selectionOrder.Clear();
-        for (int i = 1; i < players.Count; i++)
+        for (int i = 0; i < players.Count; i++)
             selectionOrder.Add((captainIndex + i) % players.Count);
         selectionCursor = 0;
+
+        // 3개 이상의 태스크가 있는 경우 일부에 순서 토큰 부여
+        AssignOrderTokens();
 
         Debug.Log($"[Mission] 태스크 풀 {taskPool.Count}개 생성, 선택 시작");
 
@@ -101,12 +104,11 @@ public class MissionManager : MonoBehaviour
         var players = GameManager.Instance.players;
         HashSet<Card> used = new HashSet<Card>();
 
-        // 미션이 지정한 총 태스크 수만큼 풀 생성
+        // 실제 딥 씨 크루: 함장도 태스크를 가질 수 있으므로 모든 플레이어 손패 참고
         int total = mission.TotalTaskCount;
         for (int i = 0; i < total; i++)
         {
-            // 태스크 카드를 생성할 때 손패를 참고하기 위해 비-함장 플레이어 순환
-            int pIdx = (captainIndex + 1 + (i % (players.Count - 1))) % players.Count;
+            int pIdx = (captainIndex + (i % players.Count)) % players.Count;
             TaskCard task = CreateUnassignedTask(players[pIdx], used);
             if (task == null) break;
             taskPool.Add(task);
@@ -213,6 +215,34 @@ public class MissionManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
+    // 순서 토큰 할당 (실제 딥 씨 크루 규칙)
+    // 태스크가 3개 이상일 때 일부 태스크에 번호를 부여한다.
+    // 번호가 붙은 태스크는 반드시 낮은 번호 순서대로 달성해야 한다.
+    // ---------------------------------------------------------------
+    private void AssignOrderTokens()
+    {
+        if (taskPool.Count < 3) return;
+
+        // 절반까지 순서 토큰 부여 (최대 5개, 실제 보드게임 토큰 수)
+        int orderCount = Mathf.Min(taskPool.Count / 2, 5);
+        if (orderCount < 2) return;
+
+        // 랜덤으로 인덱스 섞기
+        List<int> indices = new List<int>();
+        for (int i = 0; i < taskPool.Count; i++) indices.Add(i);
+        for (int i = indices.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            int tmp = indices[i]; indices[i] = indices[j]; indices[j] = tmp;
+        }
+
+        for (int k = 0; k < orderCount; k++)
+            taskPool[indices[k]].orderIndex = k + 1;
+
+        Debug.Log($"[Mission] 순서 토큰 {orderCount}개 부여");
+    }
+
+    // ---------------------------------------------------------------
     // (레거시) 자동 배분 — 더 이상 사용하지 않지만 호환성 유지
     // ---------------------------------------------------------------
     public void InitMission(int captainIndex)
@@ -307,6 +337,22 @@ public class MissionManager : MonoBehaviour
     // ---------------------------------------------------------------
     private void CompleteTask(TaskCard task)
     {
+        // 실제 딥 씨 크루 규칙: 순서 토큰이 있는 태스크는 낮은 번호가 먼저 완료되어야 한다.
+        // 낮은 번호의 태스크가 아직 미완료면 순서 위반 → 즉시 미션 실패
+        if (task.orderIndex > 0)
+        {
+            foreach (var t in tasks)
+            {
+                if (t == task) continue;
+                if (t.orderIndex > 0 && t.orderIndex < task.orderIndex && !t.isCompleted)
+                {
+                    Debug.Log($"[Mission] 순서 위반! [{task.orderIndex}] 태스크가 [{t.orderIndex}] 보다 먼저 완료됨 → 미션 실패");
+                    FailTask(task);
+                    return;
+                }
+            }
+        }
+
         task.isCompleted = true;
         task.assignedTo.AddReward(RewardTaskComplete);
         Debug.Log($"[Mission] 태스크 완료 {task.assignedTo.name} → {task}");

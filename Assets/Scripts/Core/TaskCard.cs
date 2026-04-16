@@ -22,6 +22,10 @@ public class TaskCard
     // WinTrickCount 전용
     public int requiredCount;
 
+    // 순서 토큰 (0 = 제약 없음, 1·2·3… = 이 번호 순서대로 달성해야 함)
+    // 실제 딥 씨 크루: 번호가 낮은 태스크가 먼저 완료되어야 한다
+    public int orderIndex = 0;
+
     // 런타임 상태
     public CrewAgent assignedTo;
     public bool isCompleted;
@@ -44,12 +48,13 @@ public class TaskCard
 
     public override string ToString()
     {
+        string order = orderIndex > 0 ? $"[{orderIndex}] " : "";
         return type switch
         {
-            TaskType.WinSpecificCard => $"{targetCard.suit} {targetCard.value} 트릭 획득",
-            TaskType.WinTrickCount   => $"트릭 {requiredCount}회 획득",
-            TaskType.WinFirst        => "첫 트릭 획득",
-            TaskType.WinNone         => "트릭 0회 획득",
+            TaskType.WinSpecificCard => $"{order}{targetCard.suit} {targetCard.value} 트릭 획득",
+            TaskType.WinTrickCount   => $"{order}트릭 {requiredCount}회 획득",
+            TaskType.WinFirst        => $"{order}첫 트릭 획득",
+            TaskType.WinNone         => $"{order}트릭 0회 획득",
             _ => "알 수 없는 태스크"
         };
     }

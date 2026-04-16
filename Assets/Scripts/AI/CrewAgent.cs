@@ -11,14 +11,12 @@ public class CrewAgent : Agent
     public List<Card> hand = new List<Card>();
     public bool isMyTurn = false;
 
-    [Header("Visual & Prefabs")]
-    public GameObject cardPrefab;
-    public Transform handTransform;
+    [Header("카드 프리팹 (중앙 테이블 스폰용)")]
+    public GameObject cardPrefab;   // 카드를 낼 때 centerBoard에 생성
 
-    private List<GameObject> cardVisualObjects = new List<GameObject>();
     private int pendingCardAction  = -1;
     private int pendingCommAction  =  0; // 0=안 함, 1=통신 토큰
-    private int pendingSonarTarget =  0; // 0=안 함, 1~3=상대 플레이어 상대 인덱스
+    private int pendingSonarTarget =  0; // 0=안 함, 1~3=상대 플레이어 인덱스
 
     /// <summary>UI 손패 버튼 클릭 시 호출 (인간 플레이어 전용)</summary>
     public void SelectCard(int index)
@@ -28,27 +26,22 @@ public class CrewAgent : Agent
         RequestDecision();
     }
 
-    private TrickManager       trickManager => GameManager.Instance.trickManager;
+    private TrickManager        trickManager => GameManager.Instance.trickManager;
     private CommunicationManager commManager => GameManager.Instance.communicationManager;
 
     // ---------------------------------------------------------------
-    // 카드 분배 / 초기화
+    // 카드 분배 — 데이터만 저장 (3D 손패 오브젝트 없음)
     // ---------------------------------------------------------------
     public void ReceiveCard(Card newCard)
     {
         hand.Add(newCard);
-        GameObject cardObj = Instantiate(cardPrefab, handTransform);
-        CardDisplay display = cardObj.GetComponent<CardDisplay>();
-        if (display != null) display.Setup(newCard);
-        cardVisualObjects.Add(cardObj);
-        RearrangeHand();
+        // 시각적 표시는 인간은 GameUIManager의 HandCardUI, AI는 없음
     }
 
     public void ClearHand()
     {
         hand.Clear();
-        foreach (var obj in cardVisualObjects) Destroy(obj);
-        cardVisualObjects.Clear();
+        // centerBoard의 카드 오브젝트는 TrickManager가 트릭 종료 시 정리
     }
 
     // ---------------------------------------------------------------
@@ -107,9 +100,9 @@ public class CrewAgent : Agent
         if (hand.Count == 0) { isMyTurn = false; return; }
 
         var d = actions.DiscreteActions;
-        int cardIndex    = d[0];
-        int useComm      = d.Length > 1 ? d[1] : 0;
-        int sonarTarget  = d.Length > 2 ? d[2] : 0;
+        int cardIndex   = d[0];
+        int useComm     = d.Length > 1 ? d[1] : 0;
+        int sonarTarget = d.Length > 2 ? d[2] : 0;
 
         // 통신 토큰
         if (useComm == 1 && !commManager.UseCommToken(this))
@@ -119,7 +112,7 @@ public class CrewAgent : Agent
         if (sonarTarget > 0 && !commManager.UseSonarToken(this, sonarTarget))
             AddReward(-0.1f);
 
-        // 카드 범위 초과
+        // 카드 범위 초과 처리
         if (cardIndex < 0 || cardIndex >= hand.Count)
         {
             AddReward(-1.0f);
@@ -138,21 +131,24 @@ public class CrewAgent : Agent
     }
 
     // ---------------------------------------------------------------
-    // 카드 제출
+    // 카드 제출 — 중앙 테이블에 카드 오브젝트 생성
     // ---------------------------------------------------------------
     private void PlayCard(int index)
     {
         Card playedCard = hand[index];
         hand.RemoveAt(index);
 
-        GameObject cardObj = cardVisualObjects[index];
-        cardObj.transform.SetParent(GameManager.Instance.centerBoard);
-        cardObj.transform.localPosition = new Vector3(
-            Random.Range(-1.5f, 1.5f),
-            Random.Range(-1.5f, 1.5f), 0f);
-
-        cardVisualObjects.RemoveAt(index);
-        RearrangeHand();
+        // 중앙 테이블에 카드 프리팹 스폰 (인간/AI 공통)
+        if (cardPrefab != null)
+        {
+            var center = GameManager.Instance.centerBoard;
+            GameObject cardObj = Instantiate(cardPrefab, center);
+            if (cardObj.TryGetComponent<CardDisplay>(out var display))
+                display.Setup(playedCard);
+            cardObj.transform.localPosition = new Vector3(
+                Random.Range(-1.5f, 1.5f),
+                Random.Range(-1.5f, 1.5f), 0f);
+        }
 
         Debug.Log($"[{gameObject.name}] {playedCard} 제출");
         trickManager.OnCardPlayed(this, playedCard);
@@ -160,13 +156,6 @@ public class CrewAgent : Agent
 
     // ---------------------------------------------------------------
     // 관찰 (Observation) — 총 219개
-    //   [0~39]    내 손패 원-핫           (40)
-    //   [40~79]   바닥 카드 원-핫          (40)
-    //   [80~84]   선 색상 원-핫            (5)
-    //   [85~126]  내 태스크 상태           (42)
-    //   [127~130] 플레이어별 남은 손패 수  (4)
-    //   [131~174] 통신 토큰 상태           (44)
-    //   [175~218] 소나 토큰 상태           (44)
     // ---------------------------------------------------------------
     public override void CollectObservations(VectorSensor sensor)
     {
@@ -227,11 +216,5 @@ public class CrewAgent : Agent
         if (card.suit == Card.Suit.Submarine)
             return Mathf.Clamp(36 + (card.value - 1), 36, 39);
         return Mathf.Clamp((int)card.suit * 9 + (card.value - 1), 0, 35);
-    }
-
-    private void RearrangeHand()
-    {
-        for (int i = 0; i < cardVisualObjects.Count; i++)
-            cardVisualObjects[i].transform.localPosition = new Vector3(i * 1.5f, 0, 0);
     }
 }

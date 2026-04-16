@@ -43,6 +43,14 @@ public class CommunicationManager : MonoBehaviour
     {
         CommunicationToken t = GetCommToken(agent);
         if (t == null || t.isUsed) return false;
+
+        // 실제 딥 씨 크루 규칙: 트릭 진행 중(카드가 1장 이상 올라간 상태)에는 통신 불가
+        if (!GameManager.Instance.trickManager.IsBetweenTricks)
+        {
+            Debug.Log($"[CommToken] {agent.name} — 트릭 진행 중 통신 불가 (트릭 사이에만 가능)");
+            return false;
+        }
+
         return t.TryReveal();
     }
 
