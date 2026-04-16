@@ -279,15 +279,39 @@ public class GameUIManager : MonoBehaviour
         var players = GameManager.Instance.players;
         if (cm == null) return;
 
+        var tsm = GameManager.Instance.taskSpriteMapping;
+
         for (int i = 0; i < players.Count; i++)
         {
+            bool commUsed  = cm.HasUsedCommToken(players[i]);
+            bool sonarUsed = cm.HasUsedSonarToken(players[i]);
+
             if (i < commTokenIcons.Length && commTokenIcons[i] != null)
-                commTokenIcons[i].color = cm.HasUsedCommToken(players[i])
-                    ? CommUsedColor : CommActiveColor;
+            {
+                // 스프라이트가 있으면 교체, 없으면 색상만 변경
+                if (tsm != null && (tsm.commTokenActive != null || tsm.commTokenUsed != null))
+                {
+                    commTokenIcons[i].sprite = commUsed ? tsm.commTokenUsed : tsm.commTokenActive;
+                    commTokenIcons[i].color  = Color.white;
+                }
+                else
+                {
+                    commTokenIcons[i].color = commUsed ? CommUsedColor : CommActiveColor;
+                }
+            }
 
             if (i < sonarTokenIcons.Length && sonarTokenIcons[i] != null)
-                sonarTokenIcons[i].color = cm.HasUsedSonarToken(players[i])
-                    ? SonarUsedColor : SonarActiveColor;
+            {
+                if (tsm?.sonarToken != null)
+                {
+                    sonarTokenIcons[i].sprite = tsm.sonarToken;
+                    sonarTokenIcons[i].color  = sonarUsed ? new Color(1f, 1f, 1f, 0.35f) : Color.white;
+                }
+                else
+                {
+                    sonarTokenIcons[i].color = sonarUsed ? SonarUsedColor : SonarActiveColor;
+                }
+            }
         }
 
         // 통신 토큰 버튼: 인간 플레이어가 아직 사용 안 했을 때만 활성화
@@ -429,21 +453,21 @@ public class GameUIManager : MonoBehaviour
 
                 if (taskItemPrefab != null)
                 {
+                    var tsm = GameManager.Instance.taskSpriteMapping;
                     foreach (TaskCard task in pTasks)
                     {
                         GameObject item = Instantiate(taskItemPrefab, parent);
-                        TMP_Text label = item.GetComponentInChildren<TMP_Text>();
-                        if (label != null) { label.text = task.ToString(); label.color = TaskColor(task); }
+                        SetTaskItemDisplay(item, task, tsm);
                         itemList.Add(item);
                     }
                 }
             }
             else
             {
+                var tsm = GameManager.Instance.taskSpriteMapping;
                 for (int j = 0; j < itemList.Count && j < pTasks.Count; j++)
                 {
-                    TMP_Text label = itemList[j].GetComponentInChildren<TMP_Text>();
-                    if (label != null) label.color = TaskColor(pTasks[j]);
+                    SetTaskItemDisplay(itemList[j], pTasks[j], tsm);
                 }
             }
         }
@@ -454,6 +478,55 @@ public class GameUIManager : MonoBehaviour
         if (task.isCompleted) return Color.green;
         if (task.isFailed)    return Color.red;
         return Color.white;
+    }
+
+    private void SetTaskItemDisplay(GameObject item, TaskCard task, TaskSpriteMapping tsm)
+    {
+        // TaskImage 없으면 런타임에 동적 생성
+        var taskImgT = item.transform.Find("TaskImage");
+        if (taskImgT == null)
+        {
+            var imgGO = new GameObject("TaskImage", typeof(RectTransform), typeof(Image));
+            imgGO.transform.SetParent(item.transform, false);
+            var imgRT = imgGO.GetComponent<RectTransform>();
+            imgRT.anchorMin = new Vector2(0f, 0f);
+            imgRT.anchorMax = new Vector2(0f, 1f);
+            imgRT.offsetMin = new Vector2(3f, 3f);
+            imgRT.offsetMax = new Vector2(29f, -3f);
+            var imgComp = imgGO.GetComponent<Image>();
+            imgComp.color = Color.white;
+            imgComp.preserveAspect = true;
+            imgComp.raycastTarget = false;
+            imgGO.SetActive(false);
+            taskImgT = imgGO.transform;
+        }
+
+        var taskImg = taskImgT.GetComponent<Image>();
+        bool hasSprite = false;
+        Sprite s = tsm?.GetTaskSprite(task);
+        if (s != null)
+        {
+            taskImg.sprite = s;
+            taskImg.color  = Color.white;
+            taskImgT.gameObject.SetActive(true);
+            hasSprite = true;
+        }
+        else
+        {
+            taskImgT.gameObject.SetActive(false);
+        }
+
+        // 라벨 텍스트 + 색상, 스프라이트 있으면 왼쪽 여백 추가
+        TMP_Text label = item.transform.Find("Label")?.GetComponent<TMP_Text>()
+                      ?? item.GetComponentInChildren<TMP_Text>();
+        if (label != null)
+        {
+            label.text  = task.ToString();
+            label.color = TaskColor(task);
+            var lRT = label.GetComponent<RectTransform>();
+            if (lRT != null)
+                lRT.offsetMin = hasSprite ? new Vector2(32f, 0f) : new Vector2(5f, 0f);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -571,6 +644,8 @@ public class GameUIManager : MonoBehaviour
         var picker2 = mm.GetCurrentPickingPlayer();
         bool humanTurn = picker2 == GameManager.Instance.players[0];
 
+        var tsm = GameManager.Instance.taskSpriteMapping;
+
         for (int i = 0; i < mm.taskPool.Count; i++)
         {
             int capturedIndex = i;
@@ -579,8 +654,26 @@ public class GameUIManager : MonoBehaviour
             GameObject item = Instantiate(taskPoolItemPrefab, taskPoolContainer);
             poolItemObjs.Add(item);
 
-            // 텍스트 설정
-            TMP_Text label = item.GetComponentInChildren<TMP_Text>();
+            // 태스크 스프라이트 설정
+            var taskImg = item.transform.Find("TaskImage")?.GetComponent<Image>();
+            if (taskImg != null)
+            {
+                Sprite s = tsm?.GetTaskSprite(task);
+                if (s != null)
+                {
+                    taskImg.sprite = s;
+                    taskImg.color  = Color.white;
+                    taskImg.gameObject.SetActive(true);
+                }
+                else
+                {
+                    taskImg.gameObject.SetActive(false);
+                }
+            }
+
+            // 텍스트 설정 (WinSpecificCard는 카드 스프라이트로 표시되면 짧게)
+            TMP_Text label = item.transform.Find("Label")?.GetComponent<TMP_Text>()
+                          ?? item.GetComponentInChildren<TMP_Text>();
             if (label != null) label.text = task.ToString();
 
             // 버튼: 인간 차례일 때만 활성화
@@ -591,9 +684,9 @@ public class GameUIManager : MonoBehaviour
                     btn.onClick.AddListener(() => MissionManager.Instance.HumanPickTask(capturedIndex));
             }
 
-            // 배경색 (태스크 타입별 구분)
+            // 배경색 (스프라이트 없을 때 타입별 구분)
             if (item.TryGetComponent<Image>(out var bg))
-                bg.color = TaskTypeColor(task.type);
+                bg.color = tsm != null ? new Color(0.1f, 0.12f, 0.18f, 0.92f) : TaskTypeColor(task.type);
         }
     }
 

@@ -492,6 +492,20 @@ public static class CreateGameUIEditor
         btn.colors = bc;
         var hui = card.AddComponent<HandCardUI>();
 
+        // 카드 앞면 스프라이트 이미지 (CardSpriteMapping 연결 시 사용)
+        var faceGO = new GameObject("CardFaceImage", typeof(RectTransform), typeof(Image));
+        faceGO.transform.SetParent(card.transform, false);
+        var faceRT = faceGO.GetComponent<RectTransform>();
+        faceRT.anchorMin = Vector2.zero;
+        faceRT.anchorMax = Vector2.one;
+        faceRT.offsetMin = faceRT.offsetMax = Vector2.zero;
+        var faceImg = faceGO.GetComponent<Image>();
+        faceImg.color = Color.white;
+        faceImg.raycastTarget = false;
+        faceImg.preserveAspect = true;
+        faceGO.SetActive(false); // 스프라이트가 없으면 숨김
+
+        // 폴백용 텍스트 (스프라이트 없을 때만 표시)
         var valGO = new GameObject("ValueText", typeof(RectTransform), typeof(TextMeshProUGUI));
         valGO.transform.SetParent(card.transform, false);
         var valRT  = valGO.GetComponent<RectTransform>();
@@ -524,6 +538,7 @@ public static class CreateGameUIEditor
         border.SetActive(false);
 
         hui.background     = bg;
+        hui.cardFaceImage  = faceImg;
         hui.selectedBorder = borderImg;
         hui.valueText      = valTmp;
         hui.suitText       = suitTmp;
@@ -540,8 +555,8 @@ public static class CreateGameUIEditor
         if (!Directory.Exists(dir)) AssetDatabase.CreateFolder("Assets", "Prefabs");
 
         var item = new GameObject("TaskPoolItem", typeof(RectTransform));
-        item.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 80f);
-        item.AddComponent<Image>().color = new Color(0.2f, 0.5f, 1f, 0.85f);
+        item.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 100f);
+        item.AddComponent<Image>().color = new Color(0.1f, 0.12f, 0.18f, 0.92f);
         var btn = item.AddComponent<Button>();
         var bc  = btn.colors;
         bc.highlightedColor = new Color(1f, 1f, 0.7f, 1f);
@@ -549,14 +564,31 @@ public static class CreateGameUIEditor
         bc.disabledColor    = new Color(0.4f, 0.4f, 0.4f, 0.6f);
         btn.colors = bc;
 
+        // 왼쪽: 태스크 스프라이트 이미지
+        var imgGO = new GameObject("TaskImage", typeof(RectTransform), typeof(Image));
+        imgGO.transform.SetParent(item.transform, false);
+        var imgRT = imgGO.GetComponent<RectTransform>();
+        imgRT.anchorMin = new Vector2(0f, 0f);
+        imgRT.anchorMax = new Vector2(0.45f, 1f);
+        imgRT.offsetMin = new Vector2(6f, 6f);
+        imgRT.offsetMax = new Vector2(-3f, -6f);
+        var imgComp = imgGO.GetComponent<Image>();
+        imgComp.color = Color.white;
+        imgComp.preserveAspect = true;
+        imgComp.raycastTarget = false;
+        imgGO.SetActive(false); // 스프라이트 없으면 숨김
+
+        // 오른쪽: 텍스트
         var lbl = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
         lbl.transform.SetParent(item.transform, false);
         var lRT  = lbl.GetComponent<RectTransform>();
-        lRT.anchorMin = Vector2.zero; lRT.anchorMax = Vector2.one;
-        lRT.offsetMin = new Vector2(10f, 6f); lRT.offsetMax = new Vector2(-10f, -6f);
+        lRT.anchorMin = new Vector2(0.45f, 0f);
+        lRT.anchorMax = Vector2.one;
+        lRT.offsetMin = new Vector2(4f, 6f);
+        lRT.offsetMax = new Vector2(-6f, -6f);
         var tmp  = lbl.GetComponent<TextMeshProUGUI>();
-        tmp.text = "태스크 설명"; tmp.fontSize = 15; tmp.color = Color.white;
-        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.text = "태스크 설명"; tmp.fontSize = 13; tmp.color = Color.white;
+        tmp.alignment = TextAlignmentOptions.MidlineLeft;
         tmp.textWrappingMode = TextWrappingModes.Normal;
         if (_font != null) tmp.font = _font;
 
@@ -572,9 +604,24 @@ public static class CreateGameUIEditor
         if (!Directory.Exists(dir)) AssetDatabase.CreateFolder("Assets", "Prefabs");
 
         var item = new GameObject("TaskItem", typeof(RectTransform));
-        item.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 24f);
+        item.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 28f);
         item.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.45f);
 
+        // 왼쪽: 태스크 스프라이트 이미지 (32px 고정폭)
+        var imgGO = new GameObject("TaskImage", typeof(RectTransform), typeof(Image));
+        imgGO.transform.SetParent(item.transform, false);
+        var imgRT = imgGO.GetComponent<RectTransform>();
+        imgRT.anchorMin = new Vector2(0f, 0f);
+        imgRT.anchorMax = new Vector2(0f, 1f);
+        imgRT.offsetMin = new Vector2(3f, 3f);
+        imgRT.offsetMax = new Vector2(29f, -3f); // 26px 너비
+        var imgComp = imgGO.GetComponent<Image>();
+        imgComp.color = Color.white;
+        imgComp.preserveAspect = true;
+        imgComp.raycastTarget = false;
+        imgGO.SetActive(false); // 스프라이트 없으면 숨김
+
+        // 오른쪽: 텍스트 (스프라이트 있으면 왼쪽 32px 비움, 없으면 전체 폭)
         var lbl = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
         lbl.transform.SetParent(item.transform, false);
         var lRT  = lbl.GetComponent<RectTransform>();

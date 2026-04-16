@@ -24,8 +24,9 @@ public class GameManager : MonoBehaviour
     public CommunicationManager communicationManager;
     public GameUIManager uiManager;
 
-    [Header("카드 스프라이트 매핑")]
+    [Header("스프라이트 매핑")]
     public CardSpriteMapping cardSpriteMapping;
+    public TaskSpriteMapping taskSpriteMapping;
 
     void Awake()
     {

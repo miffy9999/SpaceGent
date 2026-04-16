@@ -30,6 +30,19 @@ public class MissionManager : MonoBehaviour
     // 플레이어별 이긴 트릭 수
     private Dictionary<CrewAgent, int> trickWinCounts = new Dictionary<CrewAgent, int>();
 
+    // 연속 트릭 추적 (WinConsecutive / WinNoConsecutive)
+    private Dictionary<CrewAgent, int> consecutiveWins = new Dictionary<CrewAgent, int>();
+
+    // 슈트별 카드 획득 수 [slotIndex = (int)Card.Suit] (WinNoSuit, WinMoreSuitThan 등)
+    private Dictionary<CrewAgent, int[]> suitCardCounts = new Dictionary<CrewAgent, int[]>();
+
+    // 첫/마지막 트릭 승자
+    private CrewAgent firstTrickWinner;
+    private CrewAgent lastTrickWinner;
+
+    // 현재 트릭 번호 (1부터 시작, WinNoneFirstN 용)
+    private int trickNumber = 0;
+
     private bool isFirstTrick = true;
     private bool missionEnded = false;
     public bool HasMissionEnded => missionEnded;
@@ -56,13 +69,23 @@ public class MissionManager : MonoBehaviour
         tasks.Clear();
         taskPool.Clear();
         trickWinCounts.Clear();
+        consecutiveWins.Clear();
+        suitCardCounts.Clear();
         isFirstTrick = true;
         missionEnded = false;
+        firstTrickWinner = null;
+        lastTrickWinner  = null;
+        trickNumber = 0;
         GameManager.Instance.uiManager?.HideResult();
 
+        int suitCount = System.Enum.GetValues(typeof(Card.Suit)).Length;
         var players = GameManager.Instance.players;
         foreach (var p in players)
-            trickWinCounts[p] = 0;
+        {
+            trickWinCounts[p]  = 0;
+            consecutiveWins[p] = 0;
+            suitCardCounts[p]  = new int[suitCount];
+        }
 
         // 미션 선택 (커리큘럼)
         int maxDifficulty = Mathf.RoundToInt(
@@ -122,8 +145,8 @@ public class MissionManager : MonoBehaviour
         var players = GameManager.Instance.players;
         HashSet<Card> used = new HashSet<Card>();
 
-        // 비-함장 3명에게 1개씩, 총 3개
-        for (int i = 1; i < players.Count; i++)
+        // 모든 플레이어가 최소 1개씩 선택할 수 있도록 players.Count개 생성
+        for (int i = 0; i < players.Count; i++)
         {
             int pIdx = (captainIndex + i) % players.Count;
             TaskCard task = CreateUnassignedTask(players[pIdx], used);
@@ -253,18 +276,37 @@ public class MissionManager : MonoBehaviour
     // ---------------------------------------------------------------
     // 트릭 결과 판정 (TrickManager에서 호출)
     // ---------------------------------------------------------------
-    public void OnTrickResolved(CrewAgent winner, List<Card> trickCards)
+    public void OnTrickResolved(CrewAgent winner, List<Card> trickCards,
+                                CrewAgent opener, Card.Suit openerSuit, Card.Suit trickLeadSuit)
     {
         if (missionEnded) return;
 
         trickWinCounts[winner]++;
+        trickNumber++;
 
+        // ── 추적 변수 업데이트 ──────────────────────────────────────────
+        if (isFirstTrick) firstTrickWinner = winner;
+        lastTrickWinner = winner;
+
+        // 연속 트릭
+        foreach (var p in GameManager.Instance.players)
+            consecutiveWins[p] = (p == winner) ? consecutiveWins[p] + 1 : 0;
+
+        // 슈트별 카드 획득 수 (winner가 이긴 트릭의 모든 카드)
+        foreach (Card c in trickCards)
+            suitCardCounts[winner][(int)c.suit]++;
+
+        // 마지막 트릭 여부: 카드를 낸 후 호출되므로 hand.Count == 0이면 마지막
+        bool isLastTrick = GameManager.Instance.players[0].hand.Count == 0;
+
+        // ── 태스크 판정 ─────────────────────────────────────────────────
         foreach (TaskCard task in tasks)
         {
             if (task.isCompleted || task.isFailed) continue;
 
             switch (task.type)
             {
+                // ── 기존 타입 ─────────────────────────────────────────
                 case TaskCard.TaskType.WinSpecificCard:
                     if (trickCards.Contains(task.targetCard))
                     {
@@ -282,9 +324,99 @@ public class MissionManager : MonoBehaviour
                     break;
 
                 case TaskCard.TaskType.WinNone:
-                    if (winner == task.assignedTo)
+                    if (winner == task.assignedTo) FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinTrickCount:
+                    if (trickWinCounts[task.assignedTo] > task.requiredCount)
                         FailTask(task);
                     break;
+
+                case TaskCard.TaskType.WinLast:
+                    break; // OnHandEnded에서 처리
+
+                case TaskCard.TaskType.WinConsecutive:
+                    if (consecutiveWins[task.assignedTo] >= task.requiredConsecutive)
+                        CompleteTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinNoConsecutive:
+                    if (winner == task.assignedTo && consecutiveWins[task.assignedTo] >= 2)
+                        FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinOnlyFirst:
+                    if (isFirstTrick) { if (winner != task.assignedTo) FailTask(task); }
+                    else              { if (winner == task.assignedTo) FailTask(task); }
+                    break;
+
+                case TaskCard.TaskType.WinOnlyLast:
+                    if (!isLastTrick && winner == task.assignedTo) FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinFirstAndLast:
+                    if (isFirstTrick && winner != task.assignedTo) { FailTask(task); break; }
+                    if (isLastTrick)
+                    {
+                        if (winner == task.assignedTo && firstTrickWinner == task.assignedTo)
+                            CompleteTask(task);
+                        else
+                            FailTask(task);
+                    }
+                    break;
+
+                // ── 슈트 관련 ─────────────────────────────────────────
+                case TaskCard.TaskType.WinNoSuit:
+                    // 해당 슈트가 리드된 트릭을 이기면 안 됨
+                    if (winner == task.assignedTo && trickLeadSuit == task.targetSuit)
+                        FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinNoOpenSuit:
+                    // 해당 슈트로 트릭을 시작(첫 카드)하면 안 됨
+                    if (opener == task.assignedTo && openerSuit == task.targetSuit)
+                        FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinMoreSuitThan:
+                    break; // OnHandEnded에서 처리
+
+                case TaskCard.TaskType.WinExactSuitCount:
+                    // 해당 슈트 카드 초과 시 즉시 실패
+                    if (suitCardCounts[task.assignedTo][(int)task.targetSuit] > task.requiredCount)
+                        FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinEachColor:
+                    break; // OnHandEnded에서 처리
+
+                // ── 트릭 수 관련 ──────────────────────────────────────
+                case TaskCard.TaskType.WinAtLeast:
+                    break; // OnHandEnded에서 처리
+
+                case TaskCard.TaskType.WinNoneFirstN:
+                    // 처음 N 트릭 안에 이기면 즉시 실패
+                    if (winner == task.assignedTo && trickNumber <= task.requiredCount)
+                        FailTask(task);
+                    break;
+
+                // ── 카드 값 관련 ──────────────────────────────────────
+                case TaskCard.TaskType.WinOddTrick:
+                    // 이긴 트릭의 모든 카드가 홀수여야 완료
+                    if (winner == task.assignedTo && AllValuesMatch(trickCards, v => v % 2 == 1))
+                        CompleteTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinEvenTrick:
+                    // 이긴 트릭의 모든 카드가 짝수여야 완료
+                    if (winner == task.assignedTo && AllValuesMatch(trickCards, v => v % 2 == 0))
+                        CompleteTask(task);
+                    break;
+
+                // ── 상대 비교 ─────────────────────────────────────────
+                case TaskCard.TaskType.WinRelativeFewer:
+                case TaskCard.TaskType.WinRelativeMore:
+                    break; // OnHandEnded에서 처리
             }
         }
 
@@ -297,31 +429,148 @@ public class MissionManager : MonoBehaviour
         }
     }
 
+    // 트릭의 모든 카드 값이 조건을 만족하는지 검사
+    private bool AllValuesMatch(List<Card> cards, System.Func<int, bool> predicate)
+    {
+        foreach (Card c in cards)
+            if (!predicate(c.value)) return false;
+        return true;
+    }
+
     // ---------------------------------------------------------------
     // 핸드 종료 시 최종 판정
     // ---------------------------------------------------------------
     public void OnHandEnded()
     {
+        var players = GameManager.Instance.players;
+
         foreach (TaskCard task in tasks)
         {
             if (task.isCompleted || task.isFailed) continue;
 
             switch (task.type)
             {
+                // ── 기존 타입 ────────────────────────────────────────
+                case TaskCard.TaskType.WinSpecificCard:
+                    FailTask(task);
+                    break;
+
                 case TaskCard.TaskType.WinTrickCount:
-                    if (trickWinCounts[task.assignedTo] >= task.requiredCount)
-                        CompleteTask(task);
-                    else
-                        FailTask(task);
+                    if (trickWinCounts[task.assignedTo] == task.requiredCount) CompleteTask(task);
+                    else FailTask(task);
                     break;
 
                 case TaskCard.TaskType.WinNone:
                     CompleteTask(task);
                     break;
 
-                case TaskCard.TaskType.WinSpecificCard:
+                case TaskCard.TaskType.WinFirst:
                     FailTask(task);
                     break;
+
+                case TaskCard.TaskType.WinLast:
+                    if (lastTrickWinner == task.assignedTo) CompleteTask(task);
+                    else FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinConsecutive:
+                    FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinNoConsecutive:
+                    CompleteTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinOnlyFirst:
+                    if (firstTrickWinner == task.assignedTo) CompleteTask(task);
+                    else FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinOnlyLast:
+                    if (lastTrickWinner == task.assignedTo) CompleteTask(task);
+                    else FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinFirstAndLast:
+                    FailTask(task);
+                    break;
+
+                // ── 슈트 관련 ────────────────────────────────────────
+                case TaskCard.TaskType.WinNoSuit:
+                    CompleteTask(task); // 실패 없이 여기까지 왔으면 성공
+                    break;
+
+                case TaskCard.TaskType.WinNoOpenSuit:
+                    CompleteTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinMoreSuitThan:
+                {
+                    int a = suitCardCounts[task.assignedTo][(int)task.targetSuit];
+                    int b = suitCardCounts[task.assignedTo][(int)task.suitB];
+                    if (a > b) CompleteTask(task);
+                    else FailTask(task);
+                    break;
+                }
+
+                case TaskCard.TaskType.WinExactSuitCount:
+                    if (suitCardCounts[task.assignedTo][(int)task.targetSuit] == task.requiredCount)
+                        CompleteTask(task);
+                    else
+                        FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinEachColor:
+                {
+                    bool ok = suitCardCounts[task.assignedTo][(int)Card.Suit.Yellow] > 0
+                           && suitCardCounts[task.assignedTo][(int)Card.Suit.Blue]   > 0
+                           && suitCardCounts[task.assignedTo][(int)Card.Suit.Green]  > 0
+                           && suitCardCounts[task.assignedTo][(int)Card.Suit.Pink]   > 0;
+                    if (ok) CompleteTask(task);
+                    else    FailTask(task);
+                    break;
+                }
+
+                // ── 트릭 수 관련 ─────────────────────────────────────
+                case TaskCard.TaskType.WinAtLeast:
+                    if (trickWinCounts[task.assignedTo] >= task.requiredCount) CompleteTask(task);
+                    else FailTask(task);
+                    break;
+
+                case TaskCard.TaskType.WinNoneFirstN:
+                    CompleteTask(task); // 실패 없이 여기까지 왔으면 성공
+                    break;
+
+                // ── 카드 값 관련 ─────────────────────────────────────
+                case TaskCard.TaskType.WinOddTrick:
+                case TaskCard.TaskType.WinEvenTrick:
+                    FailTask(task); // 완료는 OnTrickResolved에서만 가능
+                    break;
+
+                // ── 상대 비교 ────────────────────────────────────────
+                case TaskCard.TaskType.WinRelativeFewer:
+                {
+                    int mine = trickWinCounts[task.assignedTo];
+                    bool fewer = true;
+                    foreach (var p in players)
+                        if (p != task.assignedTo && trickWinCounts[p] <= mine)
+                            { fewer = false; break; }
+                    if (fewer) CompleteTask(task);
+                    else       FailTask(task);
+                    break;
+                }
+
+                case TaskCard.TaskType.WinRelativeMore:
+                {
+                    int mine = trickWinCounts[task.assignedTo];
+                    bool more = true;
+                    foreach (var p in players)
+                        if (p != task.assignedTo && trickWinCounts[p] >= mine)
+                            { more = false; break; }
+                    if (more) CompleteTask(task);
+                    else      FailTask(task);
+                    break;
+                }
             }
         }
 
@@ -422,14 +671,50 @@ public class MissionManager : MonoBehaviour
     private TaskCard CreateUnassignedTask(CrewAgent refPlayer, HashSet<Card> used)
     {
         float r = Random.value;
-        TaskCard.TaskType type = r < 0.6f ? TaskCard.TaskType.WinSpecificCard
-                               : r < 0.8f ? TaskCard.TaskType.WinTrickCount
-                               : r < 0.9f ? TaskCard.TaskType.WinFirst
-                                          : TaskCard.TaskType.WinNone;
+        TaskCard.TaskType type;
 
-        // 중복 방지
-        if (type == TaskCard.TaskType.WinFirst && taskPool.Exists(t => t.type == TaskCard.TaskType.WinFirst))
+        if      (r < 0.40f) type = TaskCard.TaskType.WinSpecificCard;
+        else if (r < 0.52f) type = TaskCard.TaskType.WinTrickCount;
+        else if (r < 0.58f) type = TaskCard.TaskType.WinFirst;
+        else if (r < 0.63f) type = TaskCard.TaskType.WinNone;
+        else if (r < 0.67f) type = TaskCard.TaskType.WinLast;
+        else if (r < 0.70f) type = TaskCard.TaskType.WinConsecutive;
+        else if (r < 0.72f) type = TaskCard.TaskType.WinNoConsecutive;
+        else if (r < 0.74f) type = TaskCard.TaskType.WinOnlyFirst;
+        else if (r < 0.76f) type = TaskCard.TaskType.WinOnlyLast;
+        else if (r < 0.78f) type = TaskCard.TaskType.WinFirstAndLast;
+        else if (r < 0.81f) type = TaskCard.TaskType.WinNoSuit;
+        else if (r < 0.83f) type = TaskCard.TaskType.WinNoOpenSuit;
+        else if (r < 0.85f) type = TaskCard.TaskType.WinMoreSuitThan;
+        else if (r < 0.87f) type = TaskCard.TaskType.WinExactSuitCount;
+        else if (r < 0.89f) type = TaskCard.TaskType.WinEachColor;
+        else if (r < 0.91f) type = TaskCard.TaskType.WinAtLeast;
+        else if (r < 0.93f) type = TaskCard.TaskType.WinNoneFirstN;
+        else if (r < 0.94f) type = TaskCard.TaskType.WinOddTrick;
+        else if (r < 0.95f) type = TaskCard.TaskType.WinEvenTrick;
+        else if (r < 0.97f) type = TaskCard.TaskType.WinRelativeFewer;
+        else                type = TaskCard.TaskType.WinRelativeMore;
+
+        // 풀 전체에 하나만 있어야 하는 타입 중복 방지
+        bool UniqueExists(TaskCard.TaskType t) => taskPool.Exists(x => x.type == t);
+        bool IsSingletonType(TaskCard.TaskType t) =>
+            t == TaskCard.TaskType.WinFirst        || t == TaskCard.TaskType.WinLast          ||
+            t == TaskCard.TaskType.WinNone         || t == TaskCard.TaskType.WinOnlyFirst      ||
+            t == TaskCard.TaskType.WinOnlyLast     || t == TaskCard.TaskType.WinFirstAndLast   ||
+            t == TaskCard.TaskType.WinNoConsecutive|| t == TaskCard.TaskType.WinEachColor      ||
+            t == TaskCard.TaskType.WinRelativeFewer|| t == TaskCard.TaskType.WinRelativeMore;
+
+        if (IsSingletonType(type) && UniqueExists(type))
             type = TaskCard.TaskType.WinSpecificCard;
+
+        // 랜덤 슈트 선택 헬퍼 (잠수함 제외)
+        Card.Suit RandSuit() => (Card.Suit)Random.Range(0, 4);
+        Card.Suit RandSuitExcept(Card.Suit exclude)
+        {
+            Card.Suit s;
+            do { s = RandSuit(); } while (s == exclude);
+            return s;
+        }
 
         switch (type)
         {
@@ -441,11 +726,31 @@ public class MissionManager : MonoBehaviour
                 return TaskCard.SpecificCard(target);
             }
             case TaskCard.TaskType.WinTrickCount:
-                return TaskCard.TrickCount(Random.Range(1, 4));
-            case TaskCard.TaskType.WinFirst:
-                return TaskCard.First();
-            case TaskCard.TaskType.WinNone:
-                return TaskCard.None();
+                return TaskCard.TrickCount(Random.Range(1, 5));
+            case TaskCard.TaskType.WinFirst:          return TaskCard.First();
+            case TaskCard.TaskType.WinNone:           return TaskCard.None();
+            case TaskCard.TaskType.WinLast:           return TaskCard.Last();
+            case TaskCard.TaskType.WinConsecutive:    return TaskCard.Consecutive(Random.Range(2, 4));
+            case TaskCard.TaskType.WinNoConsecutive:  return TaskCard.NoConsecutive();
+            case TaskCard.TaskType.WinOnlyFirst:      return TaskCard.OnlyFirst();
+            case TaskCard.TaskType.WinOnlyLast:       return TaskCard.OnlyLast();
+            case TaskCard.TaskType.WinFirstAndLast:   return TaskCard.FirstAndLast();
+            case TaskCard.TaskType.WinNoSuit:         return TaskCard.NoSuit(RandSuit());
+            case TaskCard.TaskType.WinNoOpenSuit:     return TaskCard.NoOpenSuit(RandSuit());
+            case TaskCard.TaskType.WinMoreSuitThan:
+            {
+                Card.Suit a = RandSuit();
+                return TaskCard.MoreSuitThan(a, RandSuitExcept(a));
+            }
+            case TaskCard.TaskType.WinExactSuitCount:
+                return TaskCard.ExactSuitCount(RandSuit(), Random.Range(1, 4));
+            case TaskCard.TaskType.WinEachColor:      return TaskCard.EachColor();
+            case TaskCard.TaskType.WinAtLeast:        return TaskCard.AtLeast(Random.Range(1, 5));
+            case TaskCard.TaskType.WinNoneFirstN:     return TaskCard.NoneFirstN(Random.Range(1, 4));
+            case TaskCard.TaskType.WinOddTrick:       return TaskCard.OddTrick();
+            case TaskCard.TaskType.WinEvenTrick:      return TaskCard.EvenTrick();
+            case TaskCard.TaskType.WinRelativeFewer:  return TaskCard.RelativeFewer();
+            case TaskCard.TaskType.WinRelativeMore:   return TaskCard.RelativeMore();
             default:
                 return null;
         }

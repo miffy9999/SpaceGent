@@ -153,7 +153,14 @@ public class TrickManager : MonoBehaviour
 
         Debug.Log($"트릭 승자: {winner.name} ({winningCard.suit} {winningCard.value})");
 
-        MissionManager.Instance.OnTrickResolved(winner, new List<Card>(cardsOnTable));
+        // opener: 트릭을 처음 연 플레이어 (playersOnTable[0])
+        // openerSuit: 첫 카드의 실제 슈트 (leadSuit는 잠수함 제외하므로 별도 전달)
+        MissionManager.Instance.OnTrickResolved(
+            winner,
+            new List<Card>(cardsOnTable),
+            playersOnTable[0],
+            cardsOnTable[0].suit,
+            leadSuit);
         ClearTableAndStartNextTrick(nextLead);
     }
 
