@@ -100,3 +100,6 @@ InitTestScene*.unity*
 
 # ML-Agents 자동 생성 타이머 파일
 /[Aa]ssets/ML-Agents/Timers/
+
+# 스크린샷
+/[Aa]ssets/Screenshots/
