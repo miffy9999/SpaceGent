@@ -62,6 +62,18 @@ public class HandCardUI : MonoBehaviour
             selectedBorder.gameObject.SetActive(selected);
     }
 
+    // ── 유효/무효 표시 (follow-suit 위반 카드 반투명 처리) ────────────
+    public void SetPlayable(bool playable)
+    {
+        float a = playable ? 1f : 0.35f;
+        if (background    != null) { var c = background.color;    background.color    = new Color(c.r, c.g, c.b, a); }
+        if (cardFaceImage != null) { var c = cardFaceImage.color; cardFaceImage.color = new Color(c.r, c.g, c.b, a); }
+        if (valueText     != null) { var c = valueText.color;     valueText.color     = new Color(c.r, c.g, c.b, a); }
+        if (suitText      != null) { var c = suitText.color;      suitText.color      = new Color(c.r, c.g, c.b, a); }
+        var btn = GetComponent<Button>();
+        if (btn != null) btn.interactable = playable;
+    }
+
     // ── 클릭 처리 ────────────────────────────────────────────────────
     void OnClick()
     {

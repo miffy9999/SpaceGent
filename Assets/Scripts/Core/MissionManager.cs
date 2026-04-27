@@ -208,14 +208,27 @@ public class MissionManager : MonoBehaviour
 
     private void AdvanceUntilHumanOrDone()
     {
+        int safety = 0;
         while (taskPool.Count > 0)
         {
+            if (++safety > 500)
+            {
+                Debug.LogError($"[Mission] AdvanceUntilHumanOrDone 무한루프 감지! " +
+                               $"pool={taskPool.Count} cursor={selectionCursor} order={selectionOrder.Count} → 강제 종료");
+                break;
+            }
+
             var current = GetCurrentPickingPlayer();
-            if (current == null) break;
+            if (current == null)
+            {
+                Debug.LogError($"[Mission] GetCurrentPickingPlayer() null → cursor={selectionCursor}");
+                break;
+            }
 
             // 인간 플레이어 차례 → UI 갱신 후 대기
             if (current == GameManager.Instance.players[0])
             {
+                Debug.Log($"[Mission] 인간 차례 — 태스크 풀 {taskPool.Count}개, 키 1~{taskPool.Count} 또는 버튼으로 선택");
                 GameManager.Instance.uiManager?.RefreshTaskSelection();
                 return;
             }
@@ -640,28 +653,45 @@ public class MissionManager : MonoBehaviour
 
     // ---------------------------------------------------------------
     // 관찰 벡터 (42개)
+    //   슬롯당 10개 × 4슬롯 (40) + 완료·실패 비율 (2)
+    //   slot[b+0] 태스크 타입  (type / 20)
+    //   slot[b+1] requiredCount (/ 10)
+    //   slot[b+2] requiredConsecutive (/ 5)
+    //   slot[b+3] targetSuit (/ 4)
+    //   slot[b+4] suitB (/ 4)
+    //   slot[b+5] targetCard.suit (/ 4, WinSpecificCard)
+    //   slot[b+6] targetCard.value (/ 9, WinSpecificCard)
+    //   slot[b+7] orderIndex (/ 5)
+    //   slot[b+8] isCompleted
+    //   slot[b+9] isFailed
     // ---------------------------------------------------------------
     public float[] GetTaskObservation(CrewAgent agent)
     {
         float[] obs = new float[42];
-        int completed = 0, failed = 0, total = 0;
+        List<TaskCard> agentTasks = tasks.FindAll(t => t.assignedTo == agent);
 
-        foreach (TaskCard task in tasks)
+        int completed = 0, failed = 0;
+        for (int slot = 0; slot < 4 && slot < agentTasks.Count; slot++)
         {
-            if (task.assignedTo != agent) continue;
-            total++;
-
-            if (task.type == TaskCard.TaskType.WinSpecificCard && task.targetCard != null)
-                obs[agent.GetCardIndex(task.targetCard)] = 1f;
-
+            TaskCard task = agentTasks[slot];
+            int b = slot * 10;
+            obs[b + 0] = (int)task.type / 20f;
+            obs[b + 1] = task.requiredCount / 10f;
+            obs[b + 2] = task.requiredConsecutive / 5f;
+            obs[b + 3] = (int)task.targetSuit / 4f;
+            obs[b + 4] = (int)task.suitB / 4f;
+            obs[b + 5] = task.targetCard != null ? (int)task.targetCard.suit / 4f : 0f;
+            obs[b + 6] = task.targetCard != null ? task.targetCard.value / 9f    : 0f;
+            obs[b + 7] = task.orderIndex / 5f;
+            obs[b + 8] = task.isCompleted ? 1f : 0f;
+            obs[b + 9] = task.isFailed    ? 1f : 0f;
             if (task.isCompleted) completed++;
             if (task.isFailed)    failed++;
         }
 
-        float norm = Mathf.Max(total, 1);
+        float norm = Mathf.Max(agentTasks.Count, 1);
         obs[40] = completed / norm;
         obs[41] = failed    / norm;
-
         return obs;
     }
 

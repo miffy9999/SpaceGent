@@ -43,11 +43,12 @@ public class GameManager : MonoBehaviour
     {
         ValidateSetup();
 
-        // 두 매니저에 단일 players 리스트 전달
-        deckManager.players = players;
+        deckManager.players  = players;
         trickManager.players = players;
 
-        // 게임 시작 (미션 초기화는 카드 분배 이후 TrickManager에서 수행)
+        // players[0]은 항상 인간 플레이어
+        if (players.Count > 0) players[0].isHumanPlayer = true;
+
         communicationManager.InitTokens();
         trickManager.StartGame();
     }

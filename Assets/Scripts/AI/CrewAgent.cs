@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
@@ -11,92 +10,108 @@ public class CrewAgent : Agent
     public List<Card> hand = new List<Card>();
     public bool isMyTurn = false;
 
+    [Header("플레이어 유형 (GameManager가 자동 설정)")]
+    public bool isHumanPlayer = false;
+
     [Header("카드 프리팹 (중앙 테이블 스폰용)")]
-    public GameObject cardPrefab;   // 카드를 낼 때 centerBoard에 생성
+    public GameObject cardPrefab;
 
-    private int pendingCardAction  = -1;
-    private int pendingCommAction  =  0; // 0=안 함, 1=통신 토큰
-    private int pendingSonarTarget =  0; // 0=안 함, 1~3=상대 플레이어 인덱스
+    private int pendingCommAction  = 0;
+    private int pendingSonarTarget = 0;
 
-    /// <summary>UI 손패 버튼 클릭 시 호출 (인간 플레이어 전용)</summary>
+    private TrickManager         trickManager => GameManager.Instance.trickManager;
+    private CommunicationManager commManager  => GameManager.Instance.communicationManager;
+
+    // ---------------------------------------------------------------
+    // 카드 분배
+    // ---------------------------------------------------------------
+    public void ReceiveCard(Card newCard) => hand.Add(newCard);
+    public void ClearHand()               => hand.Clear();
+
+    // ---------------------------------------------------------------
+    // UI 손패 클릭 (HandCardUI 전용)
+    // ---------------------------------------------------------------
     public void SelectCard(int index)
     {
-        if (!isMyTurn || index < 0 || index >= hand.Count) return;
-        pendingCardAction = index;
-        RequestDecision();
-    }
-
-    private TrickManager        trickManager => GameManager.Instance.trickManager;
-    private CommunicationManager commManager => GameManager.Instance.communicationManager;
-
-    // ---------------------------------------------------------------
-    // 카드 분배 — 데이터만 저장 (3D 손패 오브젝트 없음)
-    // ---------------------------------------------------------------
-    public void ReceiveCard(Card newCard)
-    {
-        hand.Add(newCard);
-        // 시각적 표시는 인간은 GameUIManager의 HandCardUI, AI는 없음
-    }
-
-    public void ClearHand()
-    {
-        hand.Clear();
-        // centerBoard의 카드 오브젝트는 TrickManager가 트릭 종료 시 정리
+        if (!isMyTurn || !isHumanPlayer) return;
+        HumanDirectPlay(index);
     }
 
     // ---------------------------------------------------------------
-    // 키보드 입력 (인간 플레이어 / Heuristic 모드)
-    //   숫자 1~0  : 카드 선택
-    //   Space     : 통신 토큰 사용
-    //   Z/X/C     : 소나 토큰 (왼쪽/맞은편/오른쪽 플레이어)
+    // 키보드 입력 (인간 플레이어)
+    //   숫자 1~0 : 카드 선택
+    //   Space    : 통신 토큰 예약
+    //   Z/X/C    : 소나 토큰 대상 예약
     // ---------------------------------------------------------------
     void Update()
     {
-        if (!isMyTurn) return;
+        if (!isMyTurn || !isHumanPlayer) return;
 
-        var kb = Keyboard.current;
+        var kb = UnityEngine.InputSystem.Keyboard.current;
         if (kb == null) return;
-
-        if      (kb.digit1Key.wasPressedThisFrame) pendingCardAction = 0;
-        else if (kb.digit2Key.wasPressedThisFrame) pendingCardAction = 1;
-        else if (kb.digit3Key.wasPressedThisFrame) pendingCardAction = 2;
-        else if (kb.digit4Key.wasPressedThisFrame) pendingCardAction = 3;
-        else if (kb.digit5Key.wasPressedThisFrame) pendingCardAction = 4;
-        else if (kb.digit6Key.wasPressedThisFrame) pendingCardAction = 5;
-        else if (kb.digit7Key.wasPressedThisFrame) pendingCardAction = 6;
-        else if (kb.digit8Key.wasPressedThisFrame) pendingCardAction = 7;
-        else if (kb.digit9Key.wasPressedThisFrame) pendingCardAction = 8;
-        else if (kb.digit0Key.wasPressedThisFrame) pendingCardAction = 9;
 
         if (kb.spaceKey.wasPressedThisFrame) pendingCommAction  = 1;
         if (kb.zKey.wasPressedThisFrame)     pendingSonarTarget = 1;
         if (kb.xKey.wasPressedThisFrame)     pendingSonarTarget = 2;
         if (kb.cKey.wasPressedThisFrame)     pendingSonarTarget = 3;
 
-        if (pendingCardAction != -1)
-            RequestDecision();
-    }
+        int idx = -1;
+        if      (kb.digit1Key.wasPressedThisFrame) idx = 0;
+        else if (kb.digit2Key.wasPressedThisFrame) idx = 1;
+        else if (kb.digit3Key.wasPressedThisFrame) idx = 2;
+        else if (kb.digit4Key.wasPressedThisFrame) idx = 3;
+        else if (kb.digit5Key.wasPressedThisFrame) idx = 4;
+        else if (kb.digit6Key.wasPressedThisFrame) idx = 5;
+        else if (kb.digit7Key.wasPressedThisFrame) idx = 6;
+        else if (kb.digit8Key.wasPressedThisFrame) idx = 7;
+        else if (kb.digit9Key.wasPressedThisFrame) idx = 8;
+        else if (kb.digit0Key.wasPressedThisFrame) idx = 9;
 
-    public override void Heuristic(in ActionBuffers actionsOut)
-    {
-        var d = actionsOut.DiscreteActions;
-        d[0] = pendingCardAction >= 0 ? pendingCardAction : 0;
-        if (d.Length > 1) d[1] = pendingCommAction;
-        if (d.Length > 2) d[2] = pendingSonarTarget;
-        pendingCardAction  = -1;
-        pendingCommAction  =  0;
-        pendingSonarTarget =  0;
+        if (idx >= 0) HumanDirectPlay(idx);
     }
 
     // ---------------------------------------------------------------
-    // AI 행동 처리
-    //   Branch[0] size 10 : 낼 카드 인덱스
-    //   Branch[1] size  2 : 통신 토큰 (0=안 함, 1=사용)
-    //   Branch[2] size  4 : 소나 토큰 (0=안 함, 1~3=상대 플레이어)
+    // 인간 플레이어 직접 카드 제출
+    //   ML-Agents RequestDecision/Heuristic 파이프라인을 완전히 우회.
+    //   BehaviorType 설정이나 모델 유무와 무관하게 항상 동작한다.
+    // ---------------------------------------------------------------
+    private void HumanDirectPlay(int index)
+    {
+        if (index < 0 || index >= hand.Count)
+        {
+            Debug.Log($"[Human] 카드 인덱스 {index} 범위 초과 (손패 {hand.Count}장)");
+            return;
+        }
+
+        Card cardToPlay = hand[index];
+        if (!trickManager.IsValidPlay(this, cardToPlay))
+        {
+            Debug.Log($"[Human] {cardToPlay} — follow-suit 위반, 다른 카드를 선택하세요");
+            return;
+        }
+
+        // 토큰 처리 (Space/Z/X/C로 예약된 경우)
+        if (pendingCommAction == 1)  { commManager.UseCommToken(this);          pendingCommAction  = 0; }
+        if (pendingSonarTarget > 0)  { commManager.UseSonarToken(this, pendingSonarTarget); pendingSonarTarget = 0; }
+
+        isMyTurn = false;
+        PlayCard(index);
+    }
+
+    // Heuristic은 AI 전용 (인간은 HumanDirectPlay를 사용)
+    public override void Heuristic(in ActionBuffers actionsOut)
+    {
+        // 인간 플레이어는 이 경로를 사용하지 않음
+        var d = actionsOut.DiscreteActions;
+        d[0] = 0;
+    }
+
+    // ---------------------------------------------------------------
+    // AI 행동 처리 (Branch[0]=카드, Branch[1]=통신, Branch[2]=소나)
     // ---------------------------------------------------------------
     public override void OnActionReceived(ActionBuffers actions)
     {
-        if (!isMyTurn) return;
+        if (!isMyTurn || isHumanPlayer) return;
         if (hand.Count == 0) { isMyTurn = false; return; }
 
         var d = actions.DiscreteActions;
@@ -104,15 +119,12 @@ public class CrewAgent : Agent
         int useComm     = d.Length > 1 ? d[1] : 0;
         int sonarTarget = d.Length > 2 ? d[2] : 0;
 
-        // 통신 토큰
         if (useComm == 1 && !commManager.UseCommToken(this))
             AddReward(-0.1f);
 
-        // 소나 토큰
         if (sonarTarget > 0 && !commManager.UseSonarToken(this, sonarTarget))
             AddReward(-0.1f);
 
-        // 카드 범위 초과 처리
         if (cardIndex < 0 || cardIndex >= hand.Count)
         {
             AddReward(-1.0f);
@@ -123,11 +135,13 @@ public class CrewAgent : Agent
         if (!trickManager.IsValidPlay(this, cardToPlay))
         {
             AddReward(-1.0f);
-            Debug.Log($"[{gameObject.name}] 규칙 위반");
+            int validIdx = hand.FindIndex(c => trickManager.IsValidPlay(this, c));
+            if (validIdx >= 0) cardIndex = validIdx;
+            Debug.Log($"[{gameObject.name}] 규칙 위반 → {(validIdx >= 0 ? $"카드[{validIdx}]로 대체" : "대체 불가")}");
         }
 
-        PlayCard(cardIndex);
         isMyTurn = false;
+        PlayCard(cardIndex);
     }
 
     // ---------------------------------------------------------------
@@ -148,6 +162,19 @@ public class CrewAgent : Agent
             cardObj.transform.localPosition = new Vector3(
                 Random.Range(-1.5f, 1.5f),
                 Random.Range(-1.5f, 1.5f), 0f);
+
+            // 플레이어 이름 레이블 (카드 아래)
+            var labelGO = new GameObject("PlayerLabel");
+            labelGO.transform.SetParent(cardObj.transform, false);
+            labelGO.transform.localPosition = new Vector3(0f, -0.65f, -0.05f);
+            var tm = labelGO.AddComponent<TextMesh>();
+            tm.text          = gameObject.name;
+            tm.fontSize      = 24;
+            tm.characterSize = 0.06f;
+            tm.color         = Color.white;
+            tm.anchor        = TextAnchor.UpperCenter;
+            tm.alignment     = TextAlignment.Center;
+            tm.fontStyle     = FontStyle.Bold;
         }
 
         Debug.Log($"[{gameObject.name}] {playedCard} 제출");

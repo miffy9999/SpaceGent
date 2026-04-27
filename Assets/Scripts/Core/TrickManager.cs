@@ -21,6 +21,7 @@ public class TrickManager : MonoBehaviour
 
     private Coroutine turnTimeoutCoroutine;
     private Coroutine watchdogCoroutine;
+    private Coroutine restartCoroutine;
 
     /// <summary>
     /// 실제 딥 씨 크루 규칙: 통신 토큰은 트릭과 트릭 사이(아무도 카드를 내지 않은 상태)에만 사용 가능.
@@ -207,12 +208,20 @@ public class TrickManager : MonoBehaviour
         foreach (CrewAgent agent in players)
             agent.EndEpisode();
 
-        StartCoroutine(RestartAfterEpisodeEnd());
+        restartCoroutine = StartCoroutine(RestartAfterEpisodeEnd());
     }
 
     private IEnumerator RestartAfterEpisodeEnd()
     {
-        yield return new WaitForSeconds(1.5f);
+        yield return new WaitForSeconds(5f);
+        restartCoroutine = null;
+        StartGame();
+    }
+
+    // 결과 화면의 재시작 버튼에서 호출
+    public void ManualRestart()
+    {
+        if (restartCoroutine != null) { StopCoroutine(restartCoroutine); restartCoroutine = null; }
         StartGame();
     }
 

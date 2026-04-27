@@ -60,7 +60,8 @@ public class GameUIManager : MonoBehaviour
     // ── 점수 / 결과 ───────────────────────────────────────────────
     [Header("결과 패널")]
     public GameObject resultPanel;    // 성공/실패 패널
-    public TMP_Text resultText;     // "미션 성공!" / "미션 실패"
+    public TMP_Text resultText;       // "미션 성공!" / "미션 실패"
+    public Button restartButton;      // 수동 재시작 버튼 (미연결 시 자동 탐색)
 
     // ── 손패 표시 (인간 플레이어) ─────────────────────────────────
     [Header("손패 표시 (인간 플레이어)")]
@@ -91,7 +92,8 @@ public class GameUIManager : MonoBehaviour
     private List<GameObject>[] allPlayerTaskItems;  // [4] 플레이어별 과제 아이템
     private List<GameObject> handCardObjs = new List<GameObject>();
     private List<GameObject> poolItemObjs = new List<GameObject>();
-    private string lastHandSig = "";
+    private string lastHandSig      = "";
+    private string lastValiditySig  = "";
 
     void Awake()
     {
@@ -108,13 +110,14 @@ public class GameUIManager : MonoBehaviour
         // 플레이어별 과제 아이템 추적 리스트 초기화
         allPlayerTaskItems = new List<GameObject>[4];
         for (int i = 0; i < 4; i++) allPlayerTaskItems[i] = new List<GameObject>();
+
+        // Start() 실행 순서와 무관하게 패널이 숨김 상태에서 시작하도록 Awake에서 초기화
+        if (resultPanel        != null) resultPanel.SetActive(false);
+        if (taskSelectionPanel != null) taskSelectionPanel.SetActive(false);
     }
 
     void Start()
     {
-        if (resultPanel != null) resultPanel.SetActive(false);
-        if (taskSelectionPanel != null) taskSelectionPanel.SetActive(false);
-
         // 인스펙터 미연결 시 이름으로 자동 탐색
         AutoFindRevealPanels();
 
@@ -139,6 +142,15 @@ public class GameUIManager : MonoBehaviour
         // taskItemPrefab 미연결 시 Resources에서 탐색
         if (taskItemPrefab == null)
             taskItemPrefab = Resources.Load<GameObject>("TaskItem");
+
+        // 재시작 버튼: 미연결 시 resultPanel 하위에서 이름으로 탐색
+        if (restartButton == null && resultPanel != null)
+        {
+            var rb = resultPanel.transform.Find("RestartButton");
+            if (rb != null) restartButton = rb.GetComponent<Button>();
+        }
+        if (restartButton != null)
+            restartButton.onClick.AddListener(OnRestartClicked);
     }
 
     /// <summary>
@@ -229,8 +241,43 @@ public class GameUIManager : MonoBehaviour
         UpdateMissionInfo();
         UpdateTaskList();
         UpdateHandDisplay();
+        UpdateHandCardValidity();
         UpdatePlayerHighlights();
         UpdateAICardCounts();
+        UpdateTaskSelectionInput();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 태스크 선택 키보드 단축키 (1~9)
+    // ─────────────────────────────────────────────────────────────
+    private static readonly UnityEngine.InputSystem.Key[] s_TaskKeys =
+    {
+        UnityEngine.InputSystem.Key.Digit1, UnityEngine.InputSystem.Key.Digit2,
+        UnityEngine.InputSystem.Key.Digit3, UnityEngine.InputSystem.Key.Digit4,
+        UnityEngine.InputSystem.Key.Digit5, UnityEngine.InputSystem.Key.Digit6,
+        UnityEngine.InputSystem.Key.Digit7, UnityEngine.InputSystem.Key.Digit8,
+        UnityEngine.InputSystem.Key.Digit9
+    };
+
+    private void UpdateTaskSelectionInput()
+    {
+        if (taskSelectionPanel == null || !taskSelectionPanel.activeSelf) return;
+
+        var mm = MissionManager.Instance;
+        if (mm == null || GameManager.Instance == null) return;
+        if (mm.GetCurrentPickingPlayer() != GameManager.Instance.players[0]) return;
+
+        var kb = UnityEngine.InputSystem.Keyboard.current;
+        if (kb == null) return;
+
+        for (int i = 0; i < s_TaskKeys.Length && i < mm.taskPool.Count; i++)
+        {
+            if (kb[s_TaskKeys[i]].wasPressedThisFrame)
+            {
+                mm.HumanPickTask(i);
+                return;
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -389,6 +436,11 @@ public class GameUIManager : MonoBehaviour
     {
         var players = GameManager.Instance?.players;
         if (players == null || players.Count == 0) return;
+        if (GameManager.Instance.trickManager.currentPhase != GamePhase.Playing)
+        {
+            Debug.Log("[UI] 통신 토큰 — Playing 단계에서만 사용 가능");
+            return;
+        }
         bool ok = GameManager.Instance.communicationManager.UseCommToken(players[0]);
         if (!ok) Debug.Log("[UI] 통신 토큰 사용 불가 (이미 사용했거나 유효한 카드 없음)");
     }
@@ -397,6 +449,11 @@ public class GameUIManager : MonoBehaviour
     {
         var players = GameManager.Instance?.players;
         if (players == null || players.Count == 0) return;
+        if (GameManager.Instance.trickManager.currentPhase != GamePhase.Playing)
+        {
+            Debug.Log("[UI] 소나 토큰 — Playing 단계에서만 사용 가능");
+            return;
+        }
         bool ok = GameManager.Instance.communicationManager.UseSonarToken(players[0], relativeTarget);
         if (!ok) Debug.Log($"[UI] 소나 토큰 사용 불가 (target={relativeTarget})");
     }
@@ -536,8 +593,25 @@ public class GameUIManager : MonoBehaviour
     {
         if (resultPanel == null) return;
         resultPanel.SetActive(true);
-        if (resultText != null)
-            resultText.text = success ? "미션 성공!" : "미션 실패";
+
+        if (resultText == null) return;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(success ? "[성공] 미션 클리어!" : "[실패] 미션 실패");
+
+        var mm = MissionManager.Instance;
+        if (mm != null && mm.tasks.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (var task in mm.tasks)
+            {
+                string icon  = task.isCompleted ? "O" : task.isFailed ? "X" : "-";
+                string owner = task.assignedTo?.name ?? "?";
+                sb.AppendLine($"  {icon} [{owner}] {task}");
+            }
+        }
+
+        resultText.text = sb.ToString();
     }
 
     public void HideResult()
@@ -559,7 +633,8 @@ public class GameUIManager : MonoBehaviour
         // 손패가 바뀐 경우에만 재빌드
         string sig = string.Join(",", human.hand.ConvertAll(c => c.ToString()));
         if (sig == lastHandSig) return;
-        lastHandSig = sig;
+        lastHandSig     = sig;
+        lastValiditySig = ""; // 손패 변경 시 유효성 강제 갱신
 
         foreach (var obj in handCardObjs) Destroy(obj);
         handCardObjs.Clear();
@@ -571,6 +646,45 @@ public class GameUIManager : MonoBehaviour
             if (hui != null) hui.Setup(human.hand[i], i, human);
             handCardObjs.Add(cardGO);
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 손패 카드 유효/무효 표시 (follow-suit 위반 카드 반투명)
+    // ─────────────────────────────────────────────────────────────
+    private void UpdateHandCardValidity()
+    {
+        var tm      = GameManager.Instance.trickManager;
+        var players = GameManager.Instance.players;
+        if (players.Count == 0 || handCardObjs.Count == 0) return;
+
+        var human = players[0];
+
+        // 인간 차례 + Playing 단계 + 선 카드가 이미 나온 상태일 때만 dimming 적용
+        bool applyDim = tm != null
+                     && tm.currentPhase == GamePhase.Playing
+                     && human.isMyTurn
+                     && tm.cardsOnTable.Count > 0;
+
+        string vsig = $"{applyDim}:{tm?.leadSuit}:{tm?.cardsOnTable.Count}";
+        if (vsig == lastValiditySig) return;
+        lastValiditySig = vsig;
+
+        for (int i = 0; i < handCardObjs.Count && i < human.hand.Count; i++)
+        {
+            var hui = handCardObjs[i].GetComponent<HandCardUI>();
+            if (hui == null) continue;
+            bool valid = !applyDim || tm.IsValidPlay(human, human.hand[i]);
+            hui.SetPlayable(valid);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 결과 패널 수동 재시작
+    // ─────────────────────────────────────────────────────────────
+    public void OnRestartClicked()
+    {
+        HideResult();
+        GameManager.Instance.trickManager.ManualRestart();
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -628,18 +742,16 @@ public class GameUIManager : MonoBehaviour
         if (taskSelectionTitle != null)
         {
             var picker = mm.GetCurrentPickingPlayer();
-            string name = picker != null ? picker.name : "-";
+            string pickerName = picker != null ? picker.name : "-";
             bool isHuman = picker == GameManager.Instance.players[0];
             taskSelectionTitle.text = isHuman
-                ? $"[{name}] 태스크를 선택하세요"
-                : $"[{name}] 선택 중...";
+                ? $"[{pickerName}] 태스크를 선택하세요"
+                : $"[{pickerName}] 선택 중...";
         }
 
         // 기존 풀 항목 제거
         foreach (var obj in poolItemObjs) Destroy(obj);
         poolItemObjs.Clear();
-
-        if (taskPoolItemPrefab == null) return;
 
         var picker2 = mm.GetCurrentPickingPlayer();
         bool humanTurn = picker2 == GameManager.Instance.players[0];
@@ -651,7 +763,10 @@ public class GameUIManager : MonoBehaviour
             int capturedIndex = i;
             TaskCard task = mm.taskPool[i];
 
-            GameObject item = Instantiate(taskPoolItemPrefab, taskPoolContainer);
+            // 프리팹이 없으면 동적으로 버튼 생성
+            GameObject item = taskPoolItemPrefab != null
+                ? Instantiate(taskPoolItemPrefab, taskPoolContainer)
+                : CreateFallbackPoolItem(taskPoolContainer);
             poolItemObjs.Add(item);
 
             // 태스크 스프라이트 설정
@@ -659,19 +774,11 @@ public class GameUIManager : MonoBehaviour
             if (taskImg != null)
             {
                 Sprite s = tsm?.GetTaskSprite(task);
-                if (s != null)
-                {
-                    taskImg.sprite = s;
-                    taskImg.color  = Color.white;
-                    taskImg.gameObject.SetActive(true);
-                }
-                else
-                {
-                    taskImg.gameObject.SetActive(false);
-                }
+                if (s != null) { taskImg.sprite = s; taskImg.color = Color.white; taskImg.gameObject.SetActive(true); }
+                else taskImg.gameObject.SetActive(false);
             }
 
-            // 텍스트 설정 (WinSpecificCard는 카드 스프라이트로 표시되면 짧게)
+            // 텍스트 설정
             TMP_Text label = item.transform.Find("Label")?.GetComponent<TMP_Text>()
                           ?? item.GetComponentInChildren<TMP_Text>();
             if (label != null) label.text = task.ToString();
@@ -684,10 +791,78 @@ public class GameUIManager : MonoBehaviour
                     btn.onClick.AddListener(() => MissionManager.Instance.HumanPickTask(capturedIndex));
             }
 
-            // 배경색 (스프라이트 없을 때 타입별 구분)
+            // 배경색
             if (item.TryGetComponent<Image>(out var bg))
                 bg.color = tsm != null ? new Color(0.1f, 0.12f, 0.18f, 0.92f) : TaskTypeColor(task.type);
+
+            // 순서 토큰 배지 (orderIndex > 0인 태스크)
+            if (task.orderIndex > 0)
+            {
+                var badge = new GameObject("OrderBadge", typeof(RectTransform));
+                badge.transform.SetParent(item.transform, false);
+                var bRT = badge.GetComponent<RectTransform>();
+                bRT.anchorMin = bRT.anchorMax = new Vector2(0f, 1f);
+                bRT.pivot     = new Vector2(0f, 1f);
+                bRT.anchoredPosition = new Vector2(2f, -2f);
+                bRT.sizeDelta        = new Vector2(20f, 20f);
+                var bBG = badge.AddComponent<Image>();
+                bBG.color = new Color(1f, 0.75f, 0f, 0.95f);
+                bBG.raycastTarget = false;
+
+                var bNumGO = new GameObject("Num", typeof(RectTransform));
+                bNumGO.transform.SetParent(badge.transform, false);
+                var bNRT = bNumGO.GetComponent<RectTransform>();
+                bNRT.anchorMin = Vector2.zero;
+                bNRT.anchorMax = Vector2.one;
+                bNRT.offsetMin = bNRT.offsetMax = Vector2.zero;
+                var bTmp = bNumGO.AddComponent<TextMeshProUGUI>();
+                bTmp.text      = task.orderIndex.ToString();
+                bTmp.fontSize  = 12f;
+                bTmp.fontStyle = TMPro.FontStyles.Bold;
+                bTmp.alignment = TMPro.TextAlignmentOptions.Center;
+                bTmp.color     = Color.black;
+                bTmp.raycastTarget = false;
+            }
         }
+    }
+
+    // taskPoolItemPrefab 미연결 시 동적으로 버튼 아이템 생성
+    private GameObject CreateFallbackPoolItem(Transform parent)
+    {
+        var go = new GameObject("PoolItem", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+
+        var rt = go.GetComponent<RectTransform>();
+        rt.sizeDelta = new Vector2(280f, 55f);
+
+        var bg = go.AddComponent<Image>();
+        bg.color = new Color(0.12f, 0.14f, 0.20f, 0.95f);
+        bg.raycastTarget = true;
+
+        var btn = go.AddComponent<Button>();
+        btn.targetGraphic = bg;
+        var cb = ColorBlock.defaultColorBlock;
+        cb.normalColor      = new Color(0.12f, 0.14f, 0.20f, 0.95f);
+        cb.highlightedColor = new Color(0.25f, 0.35f, 0.55f, 1f);
+        cb.pressedColor     = new Color(0.08f, 0.10f, 0.16f, 1f);
+        cb.selectedColor    = new Color(0.20f, 0.28f, 0.45f, 1f);
+        btn.colors = cb;
+
+        var labelGO = new GameObject("Label", typeof(RectTransform));
+        labelGO.transform.SetParent(go.transform, false);
+        var lRT = labelGO.GetComponent<RectTransform>();
+        lRT.anchorMin = Vector2.zero;
+        lRT.anchorMax = Vector2.one;
+        lRT.offsetMin = new Vector2(6f, 3f);
+        lRT.offsetMax = new Vector2(-6f, -3f);
+        var tmp = labelGO.AddComponent<TextMeshProUGUI>();
+        tmp.fontSize  = 13f;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color     = Color.white;
+        tmp.textWrappingMode = TMPro.TextWrappingModes.Normal;
+        tmp.raycastTarget = false;
+
+        return go;
     }
 
     private Color TaskTypeColor(TaskCard.TaskType type)
