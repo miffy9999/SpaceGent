@@ -1,0 +1,7 @@
+# 로컬 환경용 (노트북 등, CPU 혹은 기본 환경)
+-r requirements-common.txt
+
+# PyTorch (일반 버전)
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
