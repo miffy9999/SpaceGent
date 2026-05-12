@@ -1,0 +1,8 @@
+# ML-Agents 공통 라이브러리
+# mlagents 1.0.0 이상은 보통 Python 3.9~3.10에서 안정적으로 동작합니다.
+mlagents>=1.0.0
+
+# mlagents 등 다른 라이브러리와의 호환성을 위해 numpy 2.0 미만으로 제한
+numpy>=1.21.2,<2.0.0
+pandas>=2.0.0
+scikit-learn>=1.2.0
