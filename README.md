@@ -1,13 +1,15 @@
-# SeaAI — The Crew: Deep Sea (Unity 6.3)
+# SpaceGent — The Crew: 아홉 번째 행성을 찾아서 (Unity 6.3)
 
 > **팀원 최초 설정 필수**: 이 프로젝트는 Git LFS를 사용합니다.
 > ```bash
 > git lfs install   # 1회만 실행
-> git clone https://github.com/miffy9999/Divergent.git
+> git clone https://github.com/miffy9999/SpaceGent.git
 > ```
 > Git LFS 없이 clone하면 폰트/에셋 파일이 깨집니다.
 
-4인 협동 트릭 테이킹 카드 게임. [The Crew: 심해 탐험](https://boardgamegeek.com/boardgame/324856/the-crew-mission-deep-sea) 룰을 기반으로 Unity ML-Agents AI를 구현하는 프로젝트.
+4인 협동 트릭 테이킹 카드 게임 **[The Crew: 아홉 번째 행성을 찾아서 (The Quest for Planet Nine)](https://boardgamegeek.com/boardgame/284083/the-crew-the-quest-for-planet-nine)** 룰을 기반으로 Unity ML-Agents AI를 구현하는 프로젝트.
+
+> 원래 *딥 씨 크루(The Crew: 심해 탐험)* 기반이었으나, 강화학습에 더 적합한 **스페이스 크루**로 마이그레이션했습니다. 룰 상세는 저장소의 `the_crew_rules_ko.md` 참고.
 
 ---
 
@@ -25,15 +27,15 @@
 
 ## 주요 기능
 
-- **딥 씨 크루 룰 충실 구현**
-  - Follow-suit, 잠수함(트럼프) 우선, 트릭 승자 판별
-  - 함장(잠수함 4번 소지자)부터 시계방향으로 태스크 선택
+- **스페이스 크루 룰 충실 구현**
+  - Follow-suit, 로켓(트럼프) 우선, 트릭 승자 판별
+  - 사령관(로켓 4번 소지자)부터 시계방향으로 태스크 선택
   - 순서 토큰: 번호가 있는 태스크는 낮은 번호 순서대로 달성
-  - 통신 토큰: Playing 단계, 트릭 사이에만 사용 가능
-  - 소나 토큰: Playing 단계에서만 사용 가능
+  - **무선통신 토큰**: 미션당 1회, 트릭 사이에만 사용. 자기 카드 1장을 공개하고 최고/유일/최저 위치 표시 (로켓 불가)
+  - **조난신호**: 첫 트릭 전, 로켓을 제외한 카드 1장을 인접 플레이어에게 전달
 - **21종 태스크 타입**: 특정 카드 획득부터 홀수 트릭, 상대 비교까지 다양한 조건
-- **BGA 방식 태스크 선택**: 함장부터 시계방향, AI 자동 · 인간 UI/키보드 선택
-- **ML-Agents PPO**: 관찰 벡터 219개, 이산 행동 3 브랜치
+- **BGA 방식 태스크 선택**: 사령관부터 시계방향, AI 자동 · 인간 UI/키보드 선택
+- **ML-Agents**: 관찰 벡터 257개, 이산 행동 3 브랜치
   - 인간 플레이어는 ML-Agents 파이프라인을 완전히 우회 (`HumanDirectPlay`)
 - **커리큘럼 학습**: 난이도 3→5→7→9 단계적 증가
 - **입력 시스템**: New Input System (`Keyboard.current`) + old Input (Both 모드)
@@ -45,10 +47,10 @@
 ## 프로젝트 구조
 
 ```
-SeaAI/
+SpaceGent/
 ├── Assets/
 │   ├── Editor/
-│   │   └── CreateGameUIEditor.cs      # SeaAI/Create Game UI 메뉴 — Canvas 자동 생성
+│   │   └── CreateGameUIEditor.cs      # SpaceCrew/Create Game UI 메뉴 — Canvas 자동 생성
 │   ├── Prefabs/
 │   │   ├── HandCard.prefab            # 인간 플레이어 손패 카드 UI
 │   │   ├── TaskItem.prefab            # 태스크 목록 항목
@@ -59,20 +61,20 @@ SeaAI/
 │       ├── AI/
 │       │   └── CrewAgent.cs           # ML-Agents 에이전트 + 인간 입력 처리
 │       ├── Core/
-│       │   ├── Card.cs                # 카드 데이터 (수트 4종 + 잠수함, 값 기반 동등성)
+│       │   ├── Card.cs                # 카드 데이터 (수트 4종 + 로켓, 값 기반 동등성)
 │       │   ├── CardDisplay.cs         # 3D 카드 비주얼
 │       │   ├── CardSpriteMapping.cs   # 카드 → Sprite 매핑 ScriptableObject
-│       │   ├── CommunicationManager.cs# 통신/소나 토큰 통합 관리
-│       │   ├── CommunicationToken.cs  # 통신 토큰 (자기 카드 공개)
+│       │   ├── CommunicationManager.cs# 무선통신 토큰 + 조난신호 통합 관리
+│       │   ├── CommunicationToken.cs  # 무선통신 토큰 (자기 카드 공개)
 │       │   ├── DeckManager.cs         # 덱 생성(40장) 및 4인 분배
+│       │   ├── DistressSignal.cs      # 조난신호 (로켓 제외 카드 1장을 인접 플레이어에게 전달)
 │       │   ├── GameManager.cs         # 싱글턴 — 플레이어/매니저 참조 허브
-│       │   ├── GamePhase.cs           # Setup / TaskSelection / Playing / Result
+│       │   ├── GamePhase.cs           # Setup / TaskSelection / DistressSignal / Playing / Result
 │       │   ├── GameUIManager.cs       # HUD + 태스크 선택 패널 + 토큰 버튼
 │       │   ├── HandCardUI.cs          # 손패 카드 버튼 (클릭 → SelectCard)
 │       │   ├── Mission.cs             # 미션 데이터 (id, taskCounts, 난이도)
 │       │   ├── MissionDatabase.cs     # Mission ScriptableObject 컬렉션
 │       │   ├── MissionManager.cs      # 태스크 선택 + 트릭 판정 + 보상
-│       │   ├── SonarToken.cs          # 소나 토큰 (상대 카드 공개)
 │       │   ├── TaskCard.cs            # 21종 태스크 데이터 + 순서 토큰
 │       │   ├── TaskSpriteMapping.cs   # 태스크 → Sprite 매핑 ScriptableObject
 │       │   └── TrickManager.cs        # 게임 흐름 제어 + 트릭 로직 + Watchdog
@@ -83,21 +85,21 @@ SeaAI/
 
 ---
 
-## 게임 규칙 (딥 씨 크루 기준)
+## 게임 규칙 (스페이스 크루 기준)
 
 ### 기본 트릭 테이킹
-- 잠수함(트럼프) 카드는 어떤 색 카드도 이긴다
+- 로켓(트럼프) 카드는 어떤 색 카드도 이긴다
 - 선(lead) 색상을 가지고 있으면 반드시 그 색을 내야 한다 (follow-suit)
-- 잠수함 카드끼리는 숫자가 높은 쪽이 이긴다
+- 로켓 카드끼리는 숫자가 높은 쪽이 이긴다 (4로켓이 최강)
 - 트릭 승자가 다음 트릭의 선이 된다
-- **잠수함 4번 소지자 = 함장**, 첫 트릭의 선
+- **로켓 4번 소지자 = 사령관**, 첫 트릭의 선
 
 ### 태스크 선택 단계
 1. 미션에 따라 태스크 카드 풀이 생성된다
-2. **함장부터** 시계방향으로 모든 플레이어가 1장씩 번갈아 선택한다
+2. **사령관부터** 시계방향으로 모든 플레이어가 1장씩 번갈아 선택한다
 3. AI는 자동 선택, 인간은 UI 버튼 클릭 또는 키 `1~9`로 선택
-4. 일부 태스크에는 **순서 토큰(1·2·3…)** 이 붙어 있어, 반드시 낮은 번호 순서대로 달성해야 한다
-5. 모든 태스크 선택 완료 후 트릭 게임 시작
+4. 일부 태스크에는 **순서 토큰(1·2·3…·Ω·화살표)** 이 붙어 있어, 반드시 지정된 순서대로 달성해야 한다
+5. 모든 태스크 선택 완료 후 (조난신호 단계를 거쳐) 트릭 게임 시작
 
 ### 21종 태스크 타입
 
@@ -117,7 +119,7 @@ SeaAI/
 | WinNoOpenSuit | 특정 슈트로 트릭 시작 금지 |
 | WinMoreSuitThan | 슈트 A 획득 수 > 슈트 B 획득 수 |
 | WinExactSuitCount | 특정 슈트 카드 정확히 N장 획득 |
-| WinEachColor | 4가지 슈트 각 1장 이상 획득 |
+| WinEachColor | 4가지 색 각 1장 이상 획득 |
 | WinAtLeast | 트릭 적어도 N회 획득 |
 | WinNoneFirstN | 처음 N트릭 획득 금지 |
 | WinOddTrick | 모든 카드가 홀수인 트릭 획득 |
@@ -125,9 +127,9 @@ SeaAI/
 | WinRelativeFewer | 다른 모든 플레이어보다 트릭 적게 |
 | WinRelativeMore | 다른 모든 플레이어보다 트릭 많게 |
 
-### 통신 · 소나 토큰
-- **통신 토큰**: 게임당 1회, Playing 단계의 트릭 사이에만 사용 가능. 자기 손패 카드 1장을 공개하고 최고값/최저값/유일 중 하나를 표시
-- **소나 토큰**: 게임당 1회, Playing 단계에서만 사용 가능. 상대 손패의 카드 1장을 공개
+### 무선통신 · 조난신호
+- **무선통신 토큰**: 미션당 1회, 트릭 사이(아무도 카드를 내지 않은 상태)에만 사용 가능. 자기 손패 카드 1장(로켓 제외)을 공개하고 최고값/최저값/유일 중 하나를 표시
+- **조난신호**: 미션 시작 전 첫 트릭 전에 1회. 로켓을 제외한 카드 1장을 인접 플레이어에게 전달 (AI 전용/배치 모드에서는 자동 스킵)
 
 ---
 
@@ -136,12 +138,13 @@ SeaAI/
 ```
 StartGame()
   ├─ 카드 분배 (DeckManager, 40장 → 4명 × 10장)
-  ├─ 함장 결정 (잠수함 4번 소지자)
-  ├─ 통신/소나 토큰 초기화
+  ├─ 사령관 결정 (로켓 4번 소지자)
+  ├─ 무선통신 토큰 + 조난신호 초기화
   ├─ [TaskSelection] MissionManager.StartTaskSelectionPhase()
   │     ├─ 태스크 풀 생성 (미션 DB 또는 fallback)
   │     ├─ 순서 토큰 부여 (태스크 3개 이상 시)
-  │     └─ 함장부터 시계방향: AI 자동 선택 → 인간 UI/키보드 선택 대기
+  │     └─ 사령관부터 시계방향: AI 자동 선택 → 인간 UI/키보드 선택 대기
+  ├─ [DistressSignal] 조난신호 결정 (첫 트릭 전, 선택 사항 — AI 전용이면 자동 스킵)
   ├─ [Playing] TrickManager.StartPlaying()
   │     ├─ 트릭마다: 선 플레이어부터 시계방향 입력
   │     │     ├─ 인간: 카드 클릭 또는 키보드 1~0
@@ -149,26 +152,26 @@ StartGame()
   │     ├─ 트릭 승자 판별 → MissionManager.OnTrickResolved()
   │     │     └─ 태스크 달성/실패 판정, 순서 토큰 위반 시 즉시 미션 실패
   │     └─ 손패 소진 → MissionManager.OnHandEnded() → 최종 판정
-  └─ [Result] ShowResult() → 1.5초 후 에피소드 재시작
+  └─ [Result] ShowResult() → 에피소드 재시작
 ```
 
 ---
 
 ## ML-Agents 설정
 
-### 관찰 벡터 (총 219개)
+### 관찰 벡터 (총 257개)
 
 | 인덱스 | 크기 | 내용 |
 |--------|------|------|
 | 0~39 | 40 | 내 손패 원-핫 (카드 40장 슬롯) |
 | 40~79 | 40 | 바닥 카드 원-핫 |
 | 80~84 | 5 | 선 색상(Lead Suit) 원-핫 |
-| 85~126 | 42 | 내 태스크 상태 (슬롯 4개 × 10 + 완료/실패 비율 2) |
-| 127~130 | 4 | 플레이어별 남은 손패 수 (/ 10 정규화) |
-| 131~174 | 44 | 통신 토큰 상태 (사용 여부 4 + 공개 카드 원-핫 40) |
-| 175~218 | 44 | 소나 토큰 상태 (사용 여부 4 + 공개 카드 원-핫 40) |
+| 85~246 | 162 | 팀 태스크 (4명분, viewer 기준 시계방향: 16슬롯 × 10 + 본인 완료/실패 비율 2) |
+| 247~250 | 4 | 플레이어별 남은 손패 수 (/ 10 정규화, viewer 기준 시계방향) |
+| 251~254 | 4 | 플레이어별 현재 트릭 승리 수 (/ 10 정규화) |
+| 255~256 | 2 | 역할 (내가 담당자인가 / 담당자 잔여 트릭 수) |
 
-**태스크 관찰 슬롯 구조** (슬롯당 10개, 최대 4개 태스크):
+**태스크 관찰 슬롯 구조** (슬롯당 10개, 4명 × 4슬롯 = 16슬롯. `[0..3]`=viewer, `[4..7]`=viewer+1, …):
 
 | 오프셋 | 내용 |
 |--------|------|
@@ -188,19 +191,22 @@ StartGame()
 | 브랜치 | 크기 | 내용 |
 |--------|------|------|
 | Branch[0] | 10 | 낼 카드 인덱스 (0~9) |
-| Branch[1] | 2 | 통신 토큰 (0=안 함, 1=사용) |
-| Branch[2] | 4 | 소나 토큰 (0=안 함, 1~3=상대 방향) |
+| Branch[1] | 2 | 무선통신 토큰 (0=안 함, 1=사용) |
+| Branch[2] | 4 | 예비(미사용 — 전부 마스킹). 조난신호는 트릭 전 단계에서 별도 처리 |
+
+> follow-suit 위반 카드는 `WriteDiscreteActionMask`에서 사전 마스킹되며, 그래도 들어온 경우 합법 카드로 자동 대체됩니다.
 
 ### 보상 구조
 
 | 이벤트 | 보상 | 대상 |
 |--------|------|------|
-| 태스크 달성 | +1.0 | 해당 플레이어 |
-| 태스크 실패 | −1.0 | 해당 플레이어 |
+| 태스크 달성 | +1.0 | 해당 플레이어 / 그룹 |
+| 태스크 실패 | −1.0 | 해당 플레이어 / 그룹 |
 | 미션 성공 | +2.0 | 팀 전원 |
 | 미션 실패 | −2.0 | 팀 전원 |
-| 규칙 위반 카드 | −1.0 | 해당 AI (자동 대체 후) |
-| 토큰 사용 실패 | −0.1 | 해당 AI |
+| 매 트릭 진척/역행 shaping | ±0.05 | long-horizon 태스크 진척 신호 |
+
+> 현재 기본 학습 모드는 **Phase1 협력(단일 담당자 + 도우미 3인)** 으로, 보상은 MA-POCA 그룹(또는 PPO 단일 학습자)에 집계됩니다. 보상 magnitude·담당자 수 등은 환경 파라미터로 조정합니다.
 
 ### 커리큘럼 학습
 
@@ -215,10 +221,10 @@ StartGame()
 
 ```bash
 # 학습 시작 (Unity에서 Play 버튼 먼저)
-mlagents-learn config/trainer_config.yaml --run-id=seaai_v1
+mlagents-learn config/trainer_config.yaml --run-id=spacegent_v1
 
 # 이어서 학습
-mlagents-learn config/trainer_config.yaml --run-id=seaai_v1 --resume
+mlagents-learn config/trainer_config.yaml --run-id=spacegent_v1 --resume
 
 # 결과 확인
 tensorboard --logdir results/
@@ -250,8 +256,9 @@ tensorboard --logdir results/
 | 카드 UI 클릭 | Playing | 카드 선택 |
 | 숫자키 `1~0` | Playing | 카드 선택 (손패 인덱스) |
 | 숫자키 `1~9` | TaskSelection | 태스크 선택 |
-| `Space` | Playing (트릭 사이) | 통신 토큰 사용 예약 |
-| `Z / X / C` | Playing (트릭 사이) | 소나 토큰 (왼쪽/맞은편/오른쪽 상대) |
+| `Space` | Playing (트릭 사이) | 무선통신 토큰 사용 예약 |
+| `D` | DistressSignal | 조난신호 활성화 (로켓 제외 카드 1장 → 오른쪽 전달 예약) |
+| `Space` / `Enter` | DistressSignal | 조난신호 확정 또는 건너뛰기 |
 
 > **Game 뷰 포커스**: 키보드 입력은 Unity 에디터에서 Game 뷰 화면 **내부**를 클릭하여 포커스를 맞춘 후 동작합니다.
 
