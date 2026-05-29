@@ -3,7 +3,7 @@ using UnityEngine;
 /// <summary>
 /// 조난신호: 미션 시작 전(첫 트릭 전), 팀이 사용 결정하면
 /// 카드 한 장을 인접 플레이어에게 전달한다.
-/// 로켓(잠수함) 카드는 전달 불가.
+/// 로켓(로켓) 카드는 전달 불가.
 /// 사용 시 이번 미션의 시도 횟수 기록에 +1 패널티.
 /// </summary>
 public class DistressSignal
@@ -29,7 +29,7 @@ public class DistressSignal
     {
         if (isActive || isExecuted) return false;
         if (card == null)           return false;
-        if (card.suit == Card.Suit.Submarine) return false; // 로켓 카드 전달 불가
+        if (card.suit == Card.Suit.Rocket) return false; // 로켓 카드 전달 불가
         return player.hand.Contains(card);
     }
 

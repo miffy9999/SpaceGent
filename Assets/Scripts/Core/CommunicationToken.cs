@@ -35,7 +35,7 @@ public class CommunicationToken
         Card best = null;
         foreach (Card c in owner.hand)
         {
-            if (c.suit == Card.Suit.Submarine) continue;
+            if (c.suit == Card.Suit.Rocket) continue;
             if (!IsValidCommunicationCard(c)) continue;  // 중간값 카드 제외
             if (best == null || c.value > best.value) best = c;
         }
@@ -58,7 +58,7 @@ public class CommunicationToken
     {
         if (isUsed) return false;
         if (card == null) return false;
-        if (card.suit == Card.Suit.Submarine) return false;
+        if (card.suit == Card.Suit.Rocket) return false;
         if (!owner.hand.Contains(card)) return false;
         if (!IsValidCommunicationCard(card)) return false;
 
@@ -73,7 +73,7 @@ public class CommunicationToken
     /// <summary>통신 가능 조건: 해당 무늬에서 최고값이거나, 유일하거나, 최저값이어야 한다.</summary>
     public bool IsValidCommunicationCard(Card card)
     {
-        if (card.suit == Card.Suit.Submarine) return false;
+        if (card.suit == Card.Suit.Rocket) return false;
         bool hasHigher = false, hasLower = false;
         foreach (Card c in owner.hand)
         {

@@ -14,7 +14,7 @@ public class CardSpriteMappingEditor : Editor
 
         GUILayout.Space(8);
 
-        if (GUILayout.Button("슬롯 자동 생성 (40장 + 잠수함 4장)", GUILayout.Height(30)))
+        if (GUILayout.Button("슬롯 자동 생성 (40장 + 로켓 4장)", GUILayout.Height(30)))
         {
             CardSpriteMapping mapping = (CardSpriteMapping)target;
             mapping.PopulateSlots();
@@ -31,7 +31,7 @@ public class CardSpriteMappingEditor : Editor
         if (guids.Length == 0)
         {
             Debug.LogWarning("CardSpriteMapping 에셋을 찾을 수 없습니다. " +
-                             "Project 창에서 Create > SeaAI > Card Sprite Mapping 으로 먼저 생성하세요.");
+                             "Project 창에서 Create > SpaceCrew > Card Sprite Mapping 으로 먼저 생성하세요.");
             return;
         }
 

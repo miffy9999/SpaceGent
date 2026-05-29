@@ -14,7 +14,7 @@ public class MCTSState
     // 현재 트릭 상태
     public List<Card> cardsOnTable = new List<Card>();
     public List<int>  playersOnTable = new List<int>();
-    public Card.Suit  leadSuit = Card.Suit.Submarine;   // 빈 상태 = Sub로 초기화
+    public Card.Suit  leadSuit = Card.Suit.Rocket;   // 빈 상태 = Sub로 초기화
 
     // 차례 (player index)
     public int currentPlayer;
@@ -153,7 +153,7 @@ public class MCTSState
         // 다음 트릭 셋업
         cardsOnTable.Clear();
         playersOnTable.Clear();
-        leadSuit = Card.Suit.Submarine;
+        leadSuit = Card.Suit.Rocket;
         currentPlayer = winner;
         trickNumber++;
     }
@@ -222,8 +222,8 @@ public class MCTSState
     // ---------------------------------------------------------------
     public bool Beats(Card a, Card b)
     {
-        bool aSub = a.suit == Card.Suit.Submarine;
-        bool bSub = b.suit == Card.Suit.Submarine;
+        bool aSub = a.suit == Card.Suit.Rocket;
+        bool bSub = b.suit == Card.Suit.Rocket;
         if (aSub && !bSub) return true;
         if (aSub && bSub)  return a.value > b.value;
         if (!aSub && bSub) return false;
@@ -239,7 +239,7 @@ public class MCTSState
     // ---------------------------------------------------------------
     public int WinStrength(Card c)
     {
-        if (c.suit == Card.Suit.Submarine) return 200 + c.value;
+        if (c.suit == Card.Suit.Rocket) return 200 + c.value;
         if (c.suit == leadSuit)            return 100 + c.value;
         return c.value;
     }

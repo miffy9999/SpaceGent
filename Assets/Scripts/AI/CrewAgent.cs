@@ -133,7 +133,7 @@ public class CrewAgent : Agent
 
             if (idx >= 0) d[0] = idx;
         }
-        // d[1], d[2] (통신/소나): Clear로 0 (사용 안 함)
+        // d[1], d[2] (통신/예비): Clear로 0 (사용 안 함)
     }
 
     // ── MCTS 진입점 (담당자만 호출) ────────────────────────────────
@@ -175,7 +175,7 @@ public class CrewAgent : Agent
     // 액션 마스킹
     //   Branch 0: 카드 선택        (size 10)
     //   Branch 1: 통신 토큰        (size 2 — 0=skip, 1=use)
-    //   Branch 2: 소나 토큰 타겟    (size 4 — 0=skip, 1/2/3=상대 인덱스)
+    //   Branch 2: 예비(미사용)      (size 4 — 전부 마스킹, 조난신호는 트릭 전 단계에서 별도 처리)
     // ---------------------------------------------------------------
     public override void WriteDiscreteActionMask(IDiscreteActionMask actionMask)
     {
@@ -204,12 +204,12 @@ public class CrewAgent : Agent
         //     1) CommunicationManager 존재
         //     2) 트릭 사이 (IsBetweenTricks) — 룰북상 트릭 진행 중엔 통신 불가
         //     3) 아직 사용하지 않음
-        //     4) 손에 비-잠수함 카드 1장 이상 (공개할 카드가 있어야 함)
+        //     4) 손에 비-로켓 카드 1장 이상 (공개할 카드가 있어야 함)
         bool canComm = commManager != null
                        && trickManager != null
                        && trickManager.IsBetweenTricks
                        && !commManager.HasUsedCommToken(this)
-                       && hand.Exists(c => c.suit != Card.Suit.Submarine);
+                       && hand.Exists(c => c.suit != Card.Suit.Rocket);
         if (!canComm)
             actionMask.SetActionEnabled(1, 1, false);
 
@@ -376,7 +376,7 @@ public class CrewAgent : Agent
     public int GetCardIndex(Card card)
     {
         if (card.value <= 0) return 0;
-        if (card.suit == Card.Suit.Submarine)
+        if (card.suit == Card.Suit.Rocket)
             return Mathf.Clamp(36 + (card.value - 1), 36, 39);
         return Mathf.Clamp((int)card.suit * 9 + (card.value - 1), 0, 35);
     }

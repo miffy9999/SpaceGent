@@ -90,7 +90,7 @@ public class HandCardUI : MonoBehaviour
             case Card.Suit.Blue:      return new Color(0.10f, 0.50f, 0.90f);
             case Card.Suit.Green:     return new Color(0.10f, 0.68f, 0.30f);
             case Card.Suit.Pink:      return new Color(0.88f, 0.18f, 0.52f);
-            case Card.Suit.Submarine: return new Color(0.28f, 0.28f, 0.33f);
+            case Card.Suit.Rocket: return new Color(0.28f, 0.28f, 0.33f);
             default:                  return Color.white;
         }
     }
@@ -103,7 +103,7 @@ public class HandCardUI : MonoBehaviour
             case Card.Suit.Blue:      return "B";
             case Card.Suit.Green:     return "G";
             case Card.Suit.Pink:      return "P";
-            case Card.Suit.Submarine: return "SUB";
+            case Card.Suit.Rocket: return "SUB";
             default:                  return "?";
         }
     }

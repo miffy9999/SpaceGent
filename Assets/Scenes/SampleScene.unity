@@ -562,7 +562,7 @@ GameObject:
   - component: {fileID: 79061418}
   - component: {fileID: 79061417}
   m_Layer: 0
-  m_Name: SonarLabel
+  m_Name: DistressSignalLabel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1377,7 +1377,7 @@ GameObject:
   - component: {fileID: 369593606}
   - component: {fileID: 369593608}
   m_Layer: 0
-  m_Name: SonarBtn1
+  m_Name: DistressSignalBtn1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1913,7 +1913,7 @@ GameObject:
   - component: {fileID: 502688020}
   - component: {fileID: 502688018}
   m_Layer: 0
-  m_Name: SonarTokenIcon
+  m_Name: DistressSignalTokenIcon
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2772,7 +2772,7 @@ GameObject:
   - component: {fileID: 654943082}
   - component: {fileID: 654943080}
   m_Layer: 0
-  m_Name: SonarTokenIcon
+  m_Name: DistressSignalTokenIcon
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3179,7 +3179,7 @@ GameObject:
   - component: {fileID: 767898781}
   - component: {fileID: 767898783}
   m_Layer: 0
-  m_Name: SonarBtn2
+  m_Name: DistressSignalBtn2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3375,7 +3375,7 @@ GameObject:
   - component: {fileID: 820973519}
   - component: {fileID: 820973518}
   m_Layer: 0
-  m_Name: SonarLabel
+  m_Name: DistressSignalLabel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3747,7 +3747,7 @@ GameObject:
   - component: {fileID: 881042504}
   - component: {fileID: 881042506}
   m_Layer: 0
-  m_Name: SonarBtn3
+  m_Name: DistressSignalBtn3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4292,7 +4292,7 @@ GameObject:
   - component: {fileID: 1048487505}
   - component: {fileID: 1048487506}
   m_Layer: 0
-  m_Name: SonarBtnRow
+  m_Name: DistressSignalBtnRow
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -7545,7 +7545,7 @@ GameObject:
   - component: {fileID: 1841761644}
   - component: {fileID: 1841761642}
   m_Layer: 0
-  m_Name: SonarTokenIcon
+  m_Name: DistressSignalTokenIcon
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -7856,7 +7856,7 @@ GameObject:
   - component: {fileID: 1937863312}
   - component: {fileID: 1937863311}
   m_Layer: 0
-  m_Name: SonarLabel
+  m_Name: DistressSignalLabel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8172,7 +8172,7 @@ GameObject:
   - component: {fileID: 2014250613}
   - component: {fileID: 2014250612}
   m_Layer: 0
-  m_Name: SonarLabel
+  m_Name: DistressSignalLabel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8880,7 +8880,7 @@ GameObject:
   - component: {fileID: 2120151535}
   - component: {fileID: 2120151533}
   m_Layer: 0
-  m_Name: SonarTokenIcon
+  m_Name: DistressSignalTokenIcon
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

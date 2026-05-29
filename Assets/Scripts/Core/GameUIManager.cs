@@ -269,7 +269,7 @@ public class GameUIManager : MonoBehaviour
         {
             var cm = GameManager.Instance.communicationManager;
             var human = players[0];
-            Card cardToPass = human.hand.Find(c => c.suit != Card.Suit.Submarine);
+            Card cardToPass = human.hand.Find(c => c.suit != Card.Suit.Rocket);
             if (cardToPass != null && cm != null)
             {
                 cm.ActivateDistressSignal(human, cardToPass, DistressSignal.Direction.Right);
@@ -391,7 +391,7 @@ public class GameUIManager : MonoBehaviour
     }
 
     // ─────────────────────────────────────────────────────────────
-    // 통신·소나 토큰 공개 카드 표시
+    // 통신 토큰 공개 카드 표시
     // ─────────────────────────────────────────────────────────────
     private void UpdateCommRevealDisplay()
     {
@@ -474,7 +474,7 @@ public class GameUIManager : MonoBehaviour
         if (players.Count == 0 || cm == null) return;
 
         var human    = players[0];
-        Card cardToPass = human.hand.Find(c => c.suit != Card.Suit.Submarine);
+        Card cardToPass = human.hand.Find(c => c.suit != Card.Suit.Rocket);
         if (cardToPass != null)
         {
             cm.ActivateDistressSignal(human, cardToPass, DistressSignal.Direction.Right);
@@ -495,7 +495,7 @@ public class GameUIManager : MonoBehaviour
         Card.Suit.Blue      => new Color(0.10f, 0.50f, 0.90f),
         Card.Suit.Green     => new Color(0.10f, 0.68f, 0.30f),
         Card.Suit.Pink      => new Color(0.88f, 0.18f, 0.52f),
-        Card.Suit.Submarine => new Color(0.28f, 0.28f, 0.33f),
+        Card.Suit.Rocket => new Color(0.28f, 0.28f, 0.33f),
         _                   => Color.gray
     };
 

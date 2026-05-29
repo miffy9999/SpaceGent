@@ -6,7 +6,7 @@ using UnityEngine.Serialization;
 /// 태스크 카드 → 스프라이트 매핑 ScriptableObject.
 ///
 /// ── 인스펙터 설정 방법 ──────────────────────────────────────────────
-/// 1. Project 창 우클릭 → Create → SeaAI → Task Sprite Mapping
+/// 1. Project 창 우클릭 → Create → SpaceCrew → Task Sprite Mapping
 /// 2. Task Entries 리스트에 항목 추가:
 ///      Type = WinFirst  → Sprite = Task_WinFirst2
 ///      Type = WinNone   → Sprite = Task_WinNoneFirst4
@@ -17,7 +17,7 @@ using UnityEngine.Serialization;
 /// 3. GameManager.taskSpriteMapping 슬롯에 이 에셋 연결
 /// ────────────────────────────────────────────────────────────────────
 /// </summary>
-[CreateAssetMenu(fileName = "TaskSpriteMapping", menuName = "SeaAI/Task Sprite Mapping")]
+[CreateAssetMenu(fileName = "TaskSpriteMapping", menuName = "SpaceCrew/Task Sprite Mapping")]
 public class TaskSpriteMapping : ScriptableObject
 {
     [System.Serializable]

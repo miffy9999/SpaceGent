@@ -45,7 +45,7 @@ public class TaskCard
         WinNoOpenSuit,      // 특정 슈트로 트릭을 시작(리드)하면 안 됨
         WinMoreSuitThan,    // targetSuit 카드 수 > suitB 카드 수 (핑크>초록 등)
         WinExactSuitCount,  // targetSuit 카드를 정확히 N장 이겨야 함
-        WinEachColor,       // 4가지 슈트(잠수함 제외) 각각 최소 1장 이겨야 함
+        WinEachColor,       // 4가지 슈트(로켓 제외) 각각 최소 1장 이겨야 함
 
         // ── 트릭 수 관련 ───────────────────────────────────────────────
         WinAtLeast,         // 적어도 N회 트릭 획득

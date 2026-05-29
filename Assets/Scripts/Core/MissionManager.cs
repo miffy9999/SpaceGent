@@ -203,7 +203,7 @@ public class MissionManager : MonoBehaviour
             GenerateFallbackPool(captainIndex);
         }
 
-        // 실제 딥 씨 크루 규칙: 함장부터 시계방향으로 모든 플레이어가 선택 (함장 포함)
+        // 실제 스페이스 크루 규칙: 함장부터 시계방향으로 모든 플레이어가 선택 (함장 포함)
         selectionOrder.Clear();
         for (int i = 0; i < players.Count; i++)
             selectionOrder.Add((captainIndex + i) % players.Count);
@@ -224,7 +224,7 @@ public class MissionManager : MonoBehaviour
         var players = GameManager.Instance.players;
         HashSet<Card> used = new HashSet<Card>();
 
-        // 실제 딥 씨 크루: 함장도 태스크를 가질 수 있으므로 모든 플레이어 손패 참고
+        // 실제 스페이스 크루: 함장도 태스크를 가질 수 있으므로 모든 플레이어 손패 참고
         int total = mission.TotalTaskCount;
         for (int i = 0; i < total; i++)
         {
@@ -616,7 +616,7 @@ public class MissionManager : MonoBehaviour
                     {
                         foreach (Card c in trickCards)
                         {
-                            if (c.suit == Card.Suit.Submarine) continue;
+                            if (c.suit == Card.Suit.Rocket) continue;
                             if (suitCardCounts[task.assignedTo][(int)c.suit] == 1)
                             {
                                 AddTeamShaping(task.assignedTo, ShapeOnTrack);
@@ -1302,7 +1302,7 @@ public class MissionManager : MonoBehaviour
             else                                type = TaskCard.TaskType.WinSpecificCard;
         }
 
-        // 랜덤 슈트 선택 헬퍼 (잠수함 제외)
+        // 랜덤 슈트 선택 헬퍼 (로켓 제외)
         Card.Suit RandSuit() => (Card.Suit)Random.Range(0, 4);
         Card.Suit RandSuitExcept(Card.Suit exclude)
         {
@@ -1355,7 +1355,7 @@ public class MissionManager : MonoBehaviour
 
     private Card PickCardFromHand(List<Card> hand, HashSet<Card> used)
     {
-        List<Card> available = hand.FindAll(c => c.suit != Card.Suit.Submarine && !used.Contains(c));
+        List<Card> available = hand.FindAll(c => c.suit != Card.Suit.Rocket && !used.Contains(c));
         if (available.Count == 0) return null;
         return available[Random.Range(0, available.Count)];
     }

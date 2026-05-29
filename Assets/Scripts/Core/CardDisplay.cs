@@ -129,7 +129,7 @@ public class CardDisplay : MonoBehaviour
             case Card.Suit.Blue:      bgColor = Color.blue;   textColor = Color.white; break;
             case Card.Suit.Green:     bgColor = Color.green;                   break;
             case Card.Suit.Pink:      bgColor = new(1f, 0.4f, 0.7f);          break;
-            case Card.Suit.Submarine: bgColor = Color.black;  textColor = Color.white; break;
+            case Card.Suit.Rocket: bgColor = Color.black;  textColor = Color.white; break;
             default:                  bgColor = Color.gray;                    break;
         }
 

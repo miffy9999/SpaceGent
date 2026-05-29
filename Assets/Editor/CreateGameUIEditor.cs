@@ -5,7 +5,7 @@ using TMPro;
 using System.IO;
 
 /// <summary>
-/// SeaAI/Create Game UI
+/// SpaceCrew/Create Game UI
 ///
 /// 모든 최상위 Canvas 자식은 순수 앵커 비율(offsetMin=offsetMax=zero)로 배치한다.
 /// 이렇게 해야 Edit 모드 Scene 뷰와 Play 모드 Game 뷰가 동일하게 보인다.
@@ -58,12 +58,12 @@ public static class CreateGameUIEditor
 
     static TMP_FontAsset _font;
 
-    [MenuItem("SeaAI/Create Game UI")]
+    [MenuItem("SpaceCrew/Create Game UI")]
     public static void Create()
     {
         _font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FONT_PATH);
         if (_font == null)
-            Debug.LogWarning($"[SeaAI] 폰트 없음: {FONT_PATH}");
+            Debug.LogWarning($"[SpaceCrew] 폰트 없음: {FONT_PATH}");
 
         // ── Canvas ─────────────────────────────────────────────────────
         Canvas canvas = Object.FindFirstObjectByType<Canvas>();
@@ -228,13 +228,13 @@ public static class CreateGameUIEditor
             var prop = so.FindProperty("uiManager");
             if (prop != null) { prop.objectReferenceValue = ui; so.ApplyModifiedProperties(); }
             EditorUtility.SetDirty(gm);
-            Debug.Log("[SeaAI] GameManager.uiManager 자동 연결 완료");
+            Debug.Log("[SpaceCrew] GameManager.uiManager 자동 연결 완료");
         }
 
-        Undo.RegisterCreatedObjectUndo(canvas.gameObject, "Create SeaAI Game UI");
+        Undo.RegisterCreatedObjectUndo(canvas.gameObject, "Create SpaceCrew Game UI");
         EditorUtility.SetDirty(canvas.gameObject);
         Selection.activeGameObject = canvas.gameObject;
-        Debug.Log("[SeaAI] Game UI 생성 완료!");
+        Debug.Log("[SpaceCrew] Game UI 생성 완료!");
     }
 
     // ── 플레이어 슬롯 (4명 공용, 최상위도 순수 앵커) ────────────────────

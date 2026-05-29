@@ -84,7 +84,7 @@ public static class Determinizer
             }
         for (int v = 1; v <= 4; v++)
         {
-            var card = new Card(Card.Suit.Submarine, v);
+            var card = new Card(Card.Suit.Rocket, v);
             if (!taken.Contains(card)) unplayed.Add(card);
         }
         return unplayed;

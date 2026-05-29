@@ -26,10 +26,10 @@ public class DeckManager : MonoBehaviour
             }
         }
 
-        // 잠수함 카드 (1~4) = 4장  →  합계 40장 (4인 기준 1인당 10장)
+        // 로켓 카드 (1~4) = 4장  →  합계 40장 (4인 기준 1인당 10장)
         for (int v = 1; v <= 4; v++)
         {
-            allCards.Add(new Card(Card.Suit.Submarine, v));
+            allCards.Add(new Card(Card.Suit.Rocket, v));
         }
     }
 

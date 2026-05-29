@@ -3,9 +3,9 @@ using UnityEngine;
 
 /// <summary>
 /// 전체 미션 목록을 보관하는 ScriptableObject.
-/// Project 창 우클릭 → Create → SeaAI → Mission Database
+/// Project 창 우클릭 → Create → SpaceCrew → Mission Database
 /// </summary>
-[CreateAssetMenu(fileName = "MissionDatabase", menuName = "SeaAI/Mission Database")]
+[CreateAssetMenu(fileName = "MissionDatabase", menuName = "SpaceCrew/Mission Database")]
 public class MissionDatabase : ScriptableObject
 {
     public List<Mission> missions = new List<Mission>();

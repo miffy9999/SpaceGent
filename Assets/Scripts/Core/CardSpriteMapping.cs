@@ -3,10 +3,10 @@ using UnityEngine;
 
 /// <summary>
 /// 카드 데이터(Suit + Value) → Sprite를 매핑하는 ScriptableObject.
-/// Project 창에서 우클릭 → Create → SeaAI → Card Sprite Mapping 으로 생성.
+/// Project 창에서 우클릭 → Create → SpaceCrew → Card Sprite Mapping 으로 생성.
 /// 생성 후 인스펙터에서 슬라이싱된 스프라이트를 드래그해서 채운다.
 /// </summary>
-[CreateAssetMenu(fileName = "CardSpriteMapping", menuName = "SeaAI/Card Sprite Mapping")]
+[CreateAssetMenu(fileName = "CardSpriteMapping", menuName = "SpaceCrew/Card Sprite Mapping")]
 public class CardSpriteMapping : ScriptableObject
 {
     [System.Serializable]
@@ -67,12 +67,12 @@ public class CardSpriteMapping : ScriptableObject
                 });
             }
         }
-        // 잠수함 1~4
+        // 로켓 1~4
         for (int v = 1; v <= 4; v++)
         {
             entries.Add(new CardSpriteEntry
             {
-                suit  = Card.Suit.Submarine,
+                suit  = Card.Suit.Rocket,
                 value = v,
                 sprite = null
             });

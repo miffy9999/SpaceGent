@@ -1,9 +1,9 @@
 [System.Serializable]
 public class Card
 {
-    public enum Suit { Yellow, Blue, Green, Pink, Submarine } // 색상 4종 + 잠수함(조커)
+    public enum Suit { Yellow, Blue, Green, Pink, Rocket } // 색상 4종 + 로켓(트럼프)
     public Suit suit;
-    public int value; // 1~9 (잠수함은 1~4)
+    public int value; // 1~9 (로켓은 1~4)
 
     public Card(Suit s, int v)
     {

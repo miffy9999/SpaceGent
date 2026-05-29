@@ -31,7 +31,7 @@ public class TrickManager : MonoBehaviour
         = new Dictionary<CrewAgent, HashSet<Card.Suit>>();
 
     /// <summary>
-    /// 실제 딥 씨 크루 규칙: 통신 토큰은 트릭과 트릭 사이(아무도 카드를 내지 않은 상태)에만 사용 가능.
+    /// 실제 스페이스 크루 규칙: 통신 토큰은 트릭과 트릭 사이(아무도 카드를 내지 않은 상태)에만 사용 가능.
     /// 트릭이 시작되어 첫 카드가 나오면 false가 된다.
     /// </summary>
     public bool IsBetweenTricks { get; private set; } = true;
@@ -131,7 +131,7 @@ public class TrickManager : MonoBehaviour
 
         cardsOnTable.Clear();
         playersOnTable.Clear();
-        leadSuit = Card.Suit.Submarine;
+        leadSuit = Card.Suit.Rocket;
 
         trickLeadIndex     = leadingPlayerIndex;
         currentPlayerIndex = leadingPlayerIndex;
@@ -163,7 +163,7 @@ public class TrickManager : MonoBehaviour
         cardsOnTable.Add(playedCard);
         playersOnTable.Add(player);
 
-        // 첫 번째 카드가 선 수트를 결정 (잠수함이 첫 카드면 잠수함이 리드 슈트)
+        // 첫 번째 카드가 선 수트를 결정 (로켓이 첫 카드면 로켓이 리드 슈트)
         if (cardsOnTable.Count == 1)
             leadSuit = playedCard.suit;
 
@@ -191,8 +191,8 @@ public class TrickManager : MonoBehaviour
         for (int i = 1; i < cardsOnTable.Count; i++)
         {
             Card c      = cardsOnTable[i];
-            bool cIsSub = c.suit == Card.Suit.Submarine;
-            bool wIsSub = winningCard.suit == Card.Suit.Submarine;
+            bool cIsSub = c.suit == Card.Suit.Rocket;
+            bool wIsSub = winningCard.suit == Card.Suit.Rocket;
 
             if      (cIsSub && !wIsSub)                                 { winningCard = c; winnerIdx = i; }
             else if (cIsSub && wIsSub  && c.value > winningCard.value)  { winningCard = c; winnerIdx = i; }
@@ -220,7 +220,7 @@ public class TrickManager : MonoBehaviour
         Debug.Log($"트릭 승자: {winner.name} ({winningCard.suit} {winningCard.value})");
 
         // opener: 트릭을 처음 연 플레이어 (playersOnTable[0])
-        // openerSuit: 첫 카드의 실제 슈트 (leadSuit는 잠수함 제외하므로 별도 전달)
+        // openerSuit: 첫 카드의 실제 슈트 (leadSuit는 로켓 제외하므로 별도 전달)
         MissionManager.Instance.OnTrickResolved(
             winner,
             new List<Card>(cardsOnTable),
@@ -368,10 +368,10 @@ public class TrickManager : MonoBehaviour
         // 트릭 첫 카드는 무엇이든 가능
         if (cardsOnTable.Count == 0)             return true;
 
-        // 리드 슈트와 같은 카드는 항상 합법 (잠수함 리드면 잠수함끼리 비교)
+        // 리드 슈트와 같은 카드는 항상 합법 (로켓 리드면 로켓끼리 비교)
         if (cardToPlay.suit == leadSuit)         return true;
 
-        // 손패에 리드 슈트 카드가 있으면 반드시 그 슈트를 내야 한다 (잠수함도 예외 없음)
+        // 손패에 리드 슈트 카드가 있으면 반드시 그 슈트를 내야 한다 (로켓도 예외 없음)
         foreach (Card c in player.hand)
             if (c.suit == leadSuit) return false;
 
@@ -441,7 +441,7 @@ public class TrickManager : MonoBehaviour
 
     // [Rule-based helper - Mode B] 적극 이기기:
     //   테이블에 카드가 있으면 → 현재 최강을 이기는 카드 중 WinStrength 가장 낮은 것
-    //   리드(테이블 빈 상태)면 → 합법 카드 중 가장 강한 카드(잠수함 우선)로 트릭을 가져감
+    //   리드(테이블 빈 상태)면 → 합법 카드 중 가장 강한 카드(로켓 우선)로 트릭을 가져감
     //   이길 카드가 전혀 없으면 -1 (호출자가 fallback)
     public int ClaimingLegalCardIndex(CrewAgent player)
     {
@@ -491,7 +491,7 @@ public class TrickManager : MonoBehaviour
 
     // [v4 — 현행] Smart Throw Lead — 담당자가 void인 suit를 피함.
     //   목표: 담당자가 자연스럽게 follow 가능한 suit로 lead → 담당자 winning 확률 ↑
-    //   1차: 합법 + 비-잠수함 + 담당자 not void + WinStrength 최솟값
+    //   1차: 합법 + 비-로켓 + 담당자 not void + WinStrength 최솟값
     //   2차 fallback: 기존 Safest (1차 후보 없을 때)
     //
     //   [v5 폐기 2026-05-28]: 다중 플레이어 void 점수 추가했으나 회귀 유발 (-6.9%p WinLast).
@@ -506,7 +506,7 @@ public class TrickManager : MonoBehaviour
         {
             Card c = player.hand[i];
             if (!IsValidPlay(player, c)) continue;
-            if (c.suit == Card.Suit.Submarine) continue;      // sub lead 회피 (담당자 sub 없으면 trump 못 침)
+            if (c.suit == Card.Suit.Rocket) continue;      // sub lead 회피 (담당자 sub 없으면 trump 못 침)
             if (IsKnownVoid(assignee, c.suit)) continue;       // 담당자 void인 suit 회피
             int sc = WinStrength(c);
             if (sc < score) { score = sc; idx = i; }
@@ -551,7 +551,7 @@ public class TrickManager : MonoBehaviour
             }
         for (int v = 1; v <= 4; v++)
         {
-            Card other = new Card(Card.Suit.Submarine, v);
+            Card other = new Card(Card.Suit.Rocket, v);
             if (playedInHand.Contains(other)) continue;
             if (cardsOnTable.Contains(other)) continue;
             if (self.hand.Contains(other))    continue;
@@ -616,11 +616,11 @@ public class TrickManager : MonoBehaviour
         return true;
     }
 
-    // 카드의 승리 가능성 점수(낮을수록 안 이김): 다른색 비트럼프 < 리드색 < 잠수함
-    //   리드 중(테이블 빔, leadSuit=Submarine)이면 비-잠수함이 낮은 값으로 → 낮은 카드 리드
+    // 카드의 승리 가능성 점수(낮을수록 안 이김): 다른색 비트럼프 < 리드색 < 로켓
+    //   리드 중(테이블 빔, leadSuit=Rocket)이면 비-로켓이 낮은 값으로 → 낮은 카드 리드
     private int WinStrength(Card c)
     {
-        if (c.suit == Card.Suit.Submarine) return 200 + c.value;
+        if (c.suit == Card.Suit.Rocket) return 200 + c.value;
         if (c.suit == leadSuit)            return 100 + c.value;
         return c.value;
     }
@@ -628,8 +628,8 @@ public class TrickManager : MonoBehaviour
     // a가 b를 이기나 (현재 leadSuit 기준, DetermineTrickWinner와 동일 규칙)
     private bool Beats(Card a, Card b)
     {
-        bool aSub = a.suit == Card.Suit.Submarine;
-        bool bSub = b.suit == Card.Suit.Submarine;
+        bool aSub = a.suit == Card.Suit.Rocket;
+        bool bSub = b.suit == Card.Suit.Rocket;
         if (aSub && !bSub) return true;
         if (aSub && bSub)  return a.value > b.value;
         if (!aSub && bSub) return false;
@@ -641,16 +641,16 @@ public class TrickManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // 함장 (잠수함 4번 소지자)
+    // 함장 (로켓 4번 소지자)
     // ---------------------------------------------------------------
     private int FindCaptainIndex()
     {
         for (int i = 0; i < players.Count; i++)
             foreach (Card c in players[i].hand)
-                if (c.suit == Card.Suit.Submarine && c.value == 4)
+                if (c.suit == Card.Suit.Rocket && c.value == 4)
                     return i;
 
-        Debug.LogWarning("[TrickManager] 잠수함 4번을 찾지 못했습니다. 0번이 함장이 됩니다.");
+        Debug.LogWarning("[TrickManager] 로켓 4번을 찾지 못했습니다. 0번이 함장이 됩니다.");
         return 0;
     }
 

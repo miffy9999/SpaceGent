@@ -122,7 +122,7 @@ public sealed class WinLastHelperStrategy : IHelperStrategy
 //    담당자 아직 미플레이 + 도우미가 리드 → Burn (큰 카드 선제 차단)
 //    담당자 아직 미플레이 + 도우미가 미드 → Block (이길 수 있으면 이김)
 //
-//  ※ 잔존 문제: 이론상 도우미가 항상 차단 불가능 (예: 담당자가 잠수함 4 보유).
+//  ※ 잔존 문제: 이론상 도우미가 항상 차단 불가능 (예: 담당자가 로켓 4 보유).
 //    fast-fail 에피소드 truncation은 구조적이라 helper 품질로 해결 불가.
 public sealed class WinNoneHelperStrategy : IHelperStrategy
 {
@@ -210,7 +210,7 @@ public sealed class WinLastAssigneeStrategy : IHelperStrategy
 
 // ── WinNone assignee ──────────────────────────────────────────────────
 //  단 한 트릭도 이기면 안 됨. 항상 안 이길 카드.
-//  ※ 손패 구조상 이길 수밖에 없는 경우(예: 잠수함 4만 남음) → 즉시 실패.
+//  ※ 손패 구조상 이길 수밖에 없는 경우(예: 로켓 4만 남음) → 즉시 실패.
 public sealed class WinNoneAssigneeStrategy : IHelperStrategy
 {
     public HelperAction DecideAction(in HelperContext ctx) => HelperAction.Throw;
