@@ -33,8 +33,8 @@ public class GameUIManager : MonoBehaviour
 
     // ── 토큰 상태 ─────────────────────────────────────────────────
     [Header("토큰 아이콘 (플레이어 4명 순서대로)")]
-    public Image[] commTokenIcons  = new Image[4];
-    public Image[] sonarTokenIcons = new Image[4];
+    public Image[] commTokenIcons      = new Image[4];
+    public Image   distressSignalIcon;   // 조난신호 토큰 아이콘 (팀 공유 1개)
 
     [Header("토큰 색상")]
     public Color tokenActiveColor = Color.white;
@@ -46,16 +46,16 @@ public class GameUIManager : MonoBehaviour
     public TMP_Text[] commRevealPositionTexts = new TMP_Text[4]; // ▲ 최고값 / ▼ 최저값 / ● 유일
     public GameObject[] commRevealPanels      = new GameObject[4]; // 공개 패널 루트 (숨김/표시)
 
-    // ── 소나 토큰 공개 표시 ────────────────────────────────────────
-    [Header("소나 토큰 공개 표시 (플레이어 4명)")]
-    public Image[]    sonarRevealCardImages = new Image[4];
-    public TMP_Text[] sonarRevealTexts      = new TMP_Text[4];
-    public GameObject[] sonarRevealPanels   = new GameObject[4];
+    // ── 조난신호 UI ────────────────────────────────────────────────
+    [Header("조난신호 패널 (첫 트릭 전 단계)")]
+    public GameObject distressSignalPanel;     // 조난신호 결정 단계 패널
+    public TMP_Text   distressSignalStatusText; // 조난신호 상태 텍스트
 
     // ── 인간 플레이어 토큰 버튼 ───────────────────────────────────
     [Header("인간 플레이어 토큰 버튼")]
-    public Button   useCommTokenButton;            // 통신 토큰 사용
-    public Button[] useSonarButtons = new Button[3]; // 소나: AI 1·2·3번 대상
+    public Button useCommTokenButton;  // 통신 토큰 사용
+    public Button useDistressSignalButton; // 조난신호 활성화 버튼
+    public Button skipDistressSignalButton; // 조난신호 스킵 버튼
 
     // ── 점수 / 결과 ───────────────────────────────────────────────
     [Header("결과 패널")]
@@ -99,12 +99,8 @@ public class GameUIManager : MonoBehaviour
     {
         // 배열이 null로 직렬화된 경우 초기화
         if (commRevealPanels        == null || commRevealPanels.Length        < 4) commRevealPanels        = new GameObject[4];
-        if (sonarRevealPanels       == null || sonarRevealPanels.Length       < 4) sonarRevealPanels       = new GameObject[4];
         if (commRevealCardImages    == null || commRevealCardImages.Length    < 4) commRevealCardImages    = new Image[4];
         if (commRevealPositionTexts == null || commRevealPositionTexts.Length < 4) commRevealPositionTexts = new TMP_Text[4];
-        if (sonarRevealCardImages   == null || sonarRevealCardImages.Length   < 4) sonarRevealCardImages   = new Image[4];
-        if (sonarRevealTexts        == null || sonarRevealTexts.Length        < 4) sonarRevealTexts        = new TMP_Text[4];
-        if (useSonarButtons         == null || useSonarButtons.Length         < 3) useSonarButtons         = new Button[3];
         if (playerTaskParents       == null || playerTaskParents.Length       < 4) playerTaskParents       = new Transform[4];
 
         // 플레이어별 과제 아이템 추적 리스트 초기화
@@ -125,19 +121,16 @@ public class GameUIManager : MonoBehaviour
         if (useCommTokenButton != null)
             useCommTokenButton.onClick.AddListener(OnUseCommTokenClicked);
 
-        for (int i = 0; i < useSonarButtons.Length; i++)
-        {
-            int captured = i + 1; // 상대적 인덱스 1~3
-            if (useSonarButtons[i] != null)
-                useSonarButtons[i].onClick.AddListener(() => OnUseSonarTokenClicked(captured));
-        }
+        // 조난신호 버튼 이벤트 연결
+        if (useDistressSignalButton  != null) useDistressSignalButton.onClick.AddListener(OnUseDistressSignalClicked);
+        if (skipDistressSignalButton != null) skipDistressSignalButton.onClick.AddListener(OnSkipDistressSignalClicked);
 
         // 공개 패널 초기 숨김 (Unity null 안전 체크)
         for (int i = 0; i < 4; i++)
         {
-            if (i < commRevealPanels.Length  && commRevealPanels[i]  != null) commRevealPanels[i].SetActive(false);
-            if (i < sonarRevealPanels.Length && sonarRevealPanels[i] != null) sonarRevealPanels[i].SetActive(false);
+            if (i < commRevealPanels.Length && commRevealPanels[i] != null) commRevealPanels[i].SetActive(false);
         }
+        if (distressSignalPanel != null) distressSignalPanel.SetActive(false);
 
         // taskItemPrefab 미연결 시 Resources에서 탐색
         if (taskItemPrefab == null)
@@ -187,21 +180,6 @@ public class GameUIManager : MonoBehaviour
                 }
             }
 
-            // 소나 공개 패널
-            if (i < sonarRevealPanels.Length && sonarRevealPanels[i] == null)
-            {
-                var sZone = slot.Find("SonarRevealZone");
-                if (sZone != null)
-                {
-                    sonarRevealPanels[i] = sZone.gameObject;
-                    var img = sZone.Find("SonarCardImage");
-                    var txt = sZone.Find("SonarTargetText");
-                    if (img != null && i < sonarRevealCardImages.Length)
-                        sonarRevealCardImages[i] = img.GetComponent<Image>();
-                    if (txt != null && i < sonarRevealTexts.Length)
-                        sonarRevealTexts[i] = txt.GetComponent<TMP_Text>();
-                }
-            }
         }
 
         // 인간 플레이어 토큰 버튼 (PlayerSlot_0/HumanTokenButtons)
@@ -215,18 +193,23 @@ public class GameUIManager : MonoBehaviour
                 {
                     var commBtn = btnArea.Find("UseCommTokenBtn");
                     if (commBtn != null) useCommTokenButton = commBtn.GetComponent<Button>();
-
-                    var sonarRow = btnArea.Find("SonarBtnRow");
-                    if (sonarRow != null)
-                    {
-                        for (int j = 0; j < 3; j++)
-                        {
-                            var sb = sonarRow.Find($"SonarBtn{j + 1}");
-                            if (sb != null && j < useSonarButtons.Length)
-                                useSonarButtons[j] = sb.GetComponent<Button>();
-                        }
-                    }
                 }
+            }
+        }
+
+        // 조난신호 패널 자동 탐색
+        if (distressSignalPanel == null)
+        {
+            var ds = transform.Find("DistressSignalPanel");
+            if (ds != null)
+            {
+                distressSignalPanel = ds.gameObject;
+                var txt = ds.Find("StatusText");
+                if (txt != null) distressSignalStatusText = txt.GetComponent<TMP_Text>();
+                var useBtn  = ds.Find("UseBtn");
+                var skipBtn = ds.Find("SkipBtn");
+                if (useBtn  != null) useDistressSignalButton  = useBtn.GetComponent<Button>();
+                if (skipBtn != null) skipDistressSignalButton = skipBtn.GetComponent<Button>();
             }
         }
     }
@@ -245,6 +228,7 @@ public class GameUIManager : MonoBehaviour
         UpdatePlayerHighlights();
         UpdateAICardCounts();
         UpdateTaskSelectionInput();
+        UpdateDistressSignalInput();
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -259,6 +243,46 @@ public class GameUIManager : MonoBehaviour
         UnityEngine.InputSystem.Key.Digit9
     };
 
+    // ─────────────────────────────────────────────────────────────
+    // 조난신호 단계 키보드 입력 (인간 플레이어)
+    //   Space / Enter : 스킵 (조난신호 사용 안 함)
+    //   D             : 조난신호 활성화 (첫 번째 비-로켓 카드를 오른쪽으로 전달)
+    // ─────────────────────────────────────────────────────────────
+    private void UpdateDistressSignalInput()
+    {
+        var tm = GameManager.Instance.trickManager;
+        if (tm == null || tm.currentPhase != GamePhase.DistressSignal) return;
+
+        var players = GameManager.Instance.players;
+        if (players.Count == 0 || !players[0].isHumanPlayer) return;
+
+        var kb = UnityEngine.InputSystem.Keyboard.current;
+        if (kb == null) return;
+
+        if (kb.spaceKey.wasPressedThisFrame || kb.enterKey.wasPressedThisFrame)
+        {
+            tm.ConfirmDistressSignal();
+            return;
+        }
+
+        if (kb.dKey.wasPressedThisFrame)
+        {
+            var cm = GameManager.Instance.communicationManager;
+            var human = players[0];
+            Card cardToPass = human.hand.Find(c => c.suit != Card.Suit.Submarine);
+            if (cardToPass != null && cm != null)
+            {
+                cm.ActivateDistressSignal(human, cardToPass, DistressSignal.Direction.Right);
+                Debug.Log($"[조난신호 UI] {cardToPass}을 오른쪽으로 전달 예약 (Space/Enter로 확정)");
+                if (distressSignalStatusText != null)
+                    distressSignalStatusText.text = $"조난신호: {cardToPass} → 오른쪽\nSpace: 확정 / 취소 불가";
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 태스크 선택 키보드 단축키 (1~9)
+    // ─────────────────────────────────────────────────────────────
     private void UpdateTaskSelectionInput()
     {
         if (taskSelectionPanel == null || !taskSelectionPanel.activeSelf) return;
@@ -315,10 +339,10 @@ public class GameUIManager : MonoBehaviour
     // ─────────────────────────────────────────────────────────────
     // 토큰 아이콘 색상 (사용 전=원색, 사용 후=어둡게)
     // ─────────────────────────────────────────────────────────────
-    private static readonly Color CommActiveColor  = new Color(0.30f, 0.75f, 1.00f, 1.00f);
-    private static readonly Color CommUsedColor    = new Color(0.15f, 0.35f, 0.50f, 0.45f);
-    private static readonly Color SonarActiveColor = new Color(1.00f, 0.80f, 0.20f, 1.00f);
-    private static readonly Color SonarUsedColor   = new Color(0.45f, 0.36f, 0.10f, 0.45f);
+    private static readonly Color CommActiveColor     = new Color(0.30f, 0.75f, 1.00f, 1.00f);
+    private static readonly Color CommUsedColor       = new Color(0.15f, 0.35f, 0.50f, 0.45f);
+    private static readonly Color DistressActiveColor = new Color(1.00f, 0.40f, 0.20f, 1.00f);
+    private static readonly Color DistressUsedColor   = new Color(0.45f, 0.18f, 0.10f, 0.45f);
 
     private void UpdateTokenStatus()
     {
@@ -330,12 +354,10 @@ public class GameUIManager : MonoBehaviour
 
         for (int i = 0; i < players.Count; i++)
         {
-            bool commUsed  = cm.HasUsedCommToken(players[i]);
-            bool sonarUsed = cm.HasUsedSonarToken(players[i]);
+            bool commUsed = cm.HasUsedCommToken(players[i]);
 
             if (i < commTokenIcons.Length && commTokenIcons[i] != null)
             {
-                // 스프라이트가 있으면 교체, 없으면 색상만 변경
                 if (tsm != null && (tsm.commTokenActive != null || tsm.commTokenUsed != null))
                 {
                     commTokenIcons[i].sprite = commUsed ? tsm.commTokenUsed : tsm.commTokenActive;
@@ -346,18 +368,20 @@ public class GameUIManager : MonoBehaviour
                     commTokenIcons[i].color = commUsed ? CommUsedColor : CommActiveColor;
                 }
             }
+        }
 
-            if (i < sonarTokenIcons.Length && sonarTokenIcons[i] != null)
+        // 조난신호 토큰 아이콘 (팀 공유)
+        if (distressSignalIcon != null)
+        {
+            bool dsActive = cm.IsDistressSignalActive;
+            if (tsm?.distressSignalToken != null)
             {
-                if (tsm?.sonarToken != null)
-                {
-                    sonarTokenIcons[i].sprite = tsm.sonarToken;
-                    sonarTokenIcons[i].color  = sonarUsed ? new Color(1f, 1f, 1f, 0.35f) : Color.white;
-                }
-                else
-                {
-                    sonarTokenIcons[i].color = sonarUsed ? SonarUsedColor : SonarActiveColor;
-                }
+                distressSignalIcon.sprite = tsm.distressSignalToken;
+                distressSignalIcon.color  = dsActive ? Color.white : new Color(1f, 1f, 1f, 0.35f);
+            }
+            else
+            {
+                distressSignalIcon.color = dsActive ? DistressActiveColor : DistressUsedColor;
             }
         }
 
@@ -407,24 +431,18 @@ public class GameUIManager : MonoBehaviour
                 }
             }
 
-            // ── 소나 토큰 ──
-            var st     = cm.GetSonarToken(players[i]);
-            bool stUsed = st != null && st.isUsed && st.revealedCard != null;
+        }
 
-            if (i < sonarRevealPanels.Length && sonarRevealPanels[i] != null)
-                sonarRevealPanels[i].SetActive(stUsed);
-
-            if (stUsed)
+        // 조난신호 상태 텍스트 갱신
+        if (distressSignalStatusText != null)
+        {
+            var ds = GameManager.Instance?.communicationManager?.distressSignal;
+            if (ds != null && ds.isActive)
             {
-                if (i < sonarRevealCardImages.Length && sonarRevealCardImages[i] != null)
-                {
-                    Sprite sp = mapping?.Get(st.revealedCard);
-                    sonarRevealCardImages[i].sprite = sp;
-                    sonarRevealCardImages[i].color  = sp != null ? Color.white : SuitToColor(st.revealedCard.suit);
-                }
-
-                if (i < sonarRevealTexts.Length && sonarRevealTexts[i] != null)
-                    sonarRevealTexts[i].text = $"↗ {st.target?.name ?? "?"}";
+                if (ds.isExecuted)
+                    distressSignalStatusText.text = $"조난신호: {ds.passingPlayer?.name} → {(ds.direction == DistressSignal.Direction.Left ? "왼쪽" : "오른쪽")} ({ds.cardToPass}) 전달 완료";
+                else
+                    distressSignalStatusText.text = $"조난신호 활성 — {ds.passingPlayer?.name}: {ds.cardToPass} → {(ds.direction == DistressSignal.Direction.Left ? "왼쪽" : "오른쪽")}";
             }
         }
     }
@@ -436,26 +454,39 @@ public class GameUIManager : MonoBehaviour
     {
         var players = GameManager.Instance?.players;
         if (players == null || players.Count == 0) return;
-        if (GameManager.Instance.trickManager.currentPhase != GamePhase.Playing)
+        var phase = GameManager.Instance.trickManager.currentPhase;
+        if (phase != GamePhase.Playing && phase != GamePhase.DistressSignal)
         {
-            Debug.Log("[UI] 통신 토큰 — Playing 단계에서만 사용 가능");
+            Debug.Log("[UI] 통신 토큰 — 트릭 시작 전 또는 트릭 사이에만 사용 가능");
             return;
         }
         bool ok = GameManager.Instance.communicationManager.UseCommToken(players[0]);
         if (!ok) Debug.Log("[UI] 통신 토큰 사용 불가 (이미 사용했거나 유효한 카드 없음)");
     }
 
-    public void OnUseSonarTokenClicked(int relativeTarget) // 1=AI1, 2=AI2, 3=AI3
+    public void OnUseDistressSignalClicked()
     {
-        var players = GameManager.Instance?.players;
-        if (players == null || players.Count == 0) return;
-        if (GameManager.Instance.trickManager.currentPhase != GamePhase.Playing)
+        var tm = GameManager.Instance?.trickManager;
+        if (tm == null || tm.currentPhase != GamePhase.DistressSignal) return;
+
+        var players = GameManager.Instance.players;
+        var cm      = GameManager.Instance.communicationManager;
+        if (players.Count == 0 || cm == null) return;
+
+        var human    = players[0];
+        Card cardToPass = human.hand.Find(c => c.suit != Card.Suit.Submarine);
+        if (cardToPass != null)
         {
-            Debug.Log("[UI] 소나 토큰 — Playing 단계에서만 사용 가능");
-            return;
+            cm.ActivateDistressSignal(human, cardToPass, DistressSignal.Direction.Right);
+            tm.ConfirmDistressSignal();
         }
-        bool ok = GameManager.Instance.communicationManager.UseSonarToken(players[0], relativeTarget);
-        if (!ok) Debug.Log($"[UI] 소나 토큰 사용 불가 (target={relativeTarget})");
+    }
+
+    public void OnSkipDistressSignalClicked()
+    {
+        var tm = GameManager.Instance?.trickManager;
+        if (tm == null || tm.currentPhase != GamePhase.DistressSignal) return;
+        tm.ConfirmDistressSignal();
     }
 
     private static Color SuitToColor(Card.Suit suit) => suit switch
@@ -571,6 +602,29 @@ public class GameUIManager : MonoBehaviour
         else
         {
             taskImgT.gameObject.SetActive(false);
+        }
+
+        // 순서 토큰 아이콘 (우측 끝에 표시)
+        var orderTokenImgT = item.transform.Find("OrderTokenImage");
+        if (orderTokenImgT == null && task.orderToken != OrderToken.None)
+        {
+            var oGO = new GameObject("OrderTokenImage", typeof(RectTransform), typeof(Image));
+            oGO.transform.SetParent(item.transform, false);
+            var oRT = oGO.GetComponent<RectTransform>();
+            oRT.anchorMin = new Vector2(1f, 0f);
+            oRT.anchorMax = new Vector2(1f, 1f);
+            oRT.offsetMin = new Vector2(-28f, 2f);
+            oRT.offsetMax = new Vector2(-2f, -2f);
+            var oImg = oGO.GetComponent<Image>();
+            oImg.preserveAspect = true;
+            oImg.raycastTarget  = false;
+            orderTokenImgT = oGO.transform;
+        }
+        if (orderTokenImgT != null)
+        {
+            Sprite tokenSprite = tsm?.GetOrderTokenSprite(task.orderToken);
+            orderTokenImgT.GetComponent<Image>().sprite = tokenSprite;
+            orderTokenImgT.gameObject.SetActive(tokenSprite != null);
         }
 
         // 라벨 텍스트 + 색상, 스프라이트 있으면 왼쪽 여백 추가
@@ -729,6 +783,27 @@ public class GameUIManager : MonoBehaviour
     public void HideTaskSelection()
     {
         if (taskSelectionPanel != null) taskSelectionPanel.SetActive(false);
+    }
+
+    /// <summary>조난신호 단계 UI 표시 (인간 플레이어 전용)</summary>
+    public void ShowDistressSignalPhase()
+    {
+        if (distressSignalPanel != null)
+        {
+            distressSignalPanel.SetActive(true);
+            if (distressSignalStatusText != null)
+                distressSignalStatusText.text = "조난신호를 사용하시겠습니까?\nD키: 첫 카드를 오른쪽으로 전달\nSpace / Enter: 건너뛰기";
+        }
+        else if (taskSelectionTitle != null)
+        {
+            // 별도 패널 없을 때 태스크 선택 제목 텍스트 재활용
+            taskSelectionTitle.text = "[조난신호 단계]\nD: 카드 전달  /  Space·Enter: 건너뛰기";
+        }
+    }
+
+    public void HideDistressSignalPhase()
+    {
+        if (distressSignalPanel != null) distressSignalPanel.SetActive(false);
     }
 
     public void RefreshTaskSelection()

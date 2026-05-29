@@ -2,16 +2,18 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 통신 토큰 + 소나 토큰을 통합 관리한다.
-/// - 통신 토큰: 자기 카드를 공개
-/// - 소나 토큰: 타인 카드를 공개
+/// 통신 토큰 + 조난신호를 통합 관리한다.
+/// - 통신 토큰: 자기 카드 1장을 공개 (최고/유일/최저 위치 표시)
+/// - 조난신호: 미션 시작 전 카드 1장을 인접 플레이어에게 전달
 /// </summary>
 public class CommunicationManager : MonoBehaviour
 {
     public static CommunicationManager Instance { get; private set; }
 
-    private List<CommunicationToken> commTokens  = new List<CommunicationToken>();
-    private List<SonarToken>         sonarTokens = new List<SonarToken>();
+    private List<CommunicationToken> commTokens = new List<CommunicationToken>();
+
+    /// <summary>미션당 공유 1개. 조난신호 토큰 상태를 나타낸다.</summary>
+    public DistressSignal distressSignal { get; private set; } = new DistressSignal();
 
     void Awake()
     {
@@ -25,114 +27,61 @@ public class CommunicationManager : MonoBehaviour
     public void InitTokens()
     {
         commTokens.Clear();
-        sonarTokens.Clear();
+        distressSignal.Reset();
 
         foreach (var p in GameManager.Instance.players)
-        {
             commTokens.Add(new CommunicationToken(p));
-            sonarTokens.Add(new SonarToken(p));
-        }
 
-        Debug.Log("[TokenManager] 통신·소나 토큰 초기화 완료");
+        Debug.Log("[CommManager] 통신 토큰 + 조난신호 초기화 완료");
     }
 
     // ---------------------------------------------------------------
-    // 통신 토큰 사용
+    // 통신 토큰: AI 자동 선택 (최고값 비-로켓 카드)
     // ---------------------------------------------------------------
     public bool UseCommToken(CrewAgent agent)
     {
         CommunicationToken t = GetCommToken(agent);
         if (t == null || t.isUsed) return false;
 
-        // 실제 딥 씨 크루 규칙: 트릭 진행 중(카드가 1장 이상 올라간 상태)에는 통신 불가
         if (!GameManager.Instance.trickManager.IsBetweenTricks)
         {
             Debug.Log($"[CommToken] {agent.name} — 트릭 진행 중 통신 불가 (트릭 사이에만 가능)");
             return false;
         }
-
         return t.TryReveal();
+    }
+
+    /// <summary>인간 플레이어용: 특정 카드를 지정해 통신한다.</summary>
+    public bool UseCommTokenWithCard(CrewAgent agent, Card card)
+    {
+        CommunicationToken t = GetCommToken(agent);
+        if (t == null || t.isUsed) return false;
+
+        if (!GameManager.Instance.trickManager.IsBetweenTricks)
+        {
+            Debug.Log($"[CommToken] {agent.name} — 트릭 진행 중 통신 불가");
+            return false;
+        }
+        return t.TryReveal(card);
     }
 
     public bool HasUsedCommToken(CrewAgent agent) => GetCommToken(agent)?.isUsed ?? false;
 
     // ---------------------------------------------------------------
-    // 소나 토큰 사용
-    // agent: 사용자, relativeTarget: 상대적 플레이어 인덱스 (1~3)
+    // 조난신호: 팀이 사용 결정 → 카드 전달
     // ---------------------------------------------------------------
-    public bool UseSonarToken(CrewAgent agent, int relativeTarget)
-    {
-        SonarToken t = GetSonarToken(agent);
-        if (t == null || t.isUsed) return false;
+    public bool ActivateDistressSignal(CrewAgent player, Card card, DistressSignal.Direction dir)
+        => distressSignal.Activate(player, card, dir);
 
-        var players    = GameManager.Instance.players;
-        int selfIndex  = players.IndexOf(agent);
-        int targetIndex = (selfIndex + relativeTarget) % players.Count;
-        CrewAgent target = players[targetIndex];
+    public bool ExecuteDistressSignal()
+        => distressSignal.Execute();
 
-        return t.TryReveal(target);
-    }
-
-    public bool HasUsedSonarToken(CrewAgent agent) => GetSonarToken(agent)?.isUsed ?? false;
-
-    // ---------------------------------------------------------------
-    // 관찰 벡터
-    // ---------------------------------------------------------------
-
-    // 통신 토큰 관찰 (44개)
-    //   [0~3]  : 플레이어별 사용 여부
-    //   [4~43] : 공개 카드 원-핫 OR 합산
-    public float[] GetCommObservation()
-    {
-        var players = GameManager.Instance.players;
-        float[] obs = new float[44];
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            CommunicationToken t = GetCommToken(players[i]);
-            obs[i] = (t != null && t.isUsed) ? 1f : 0f;
-        }
-
-        foreach (CommunicationToken t in commTokens)
-        {
-            if (!t.isUsed || t.revealedCard == null) continue;
-            int idx = 4 + players[0].GetCardIndex(t.revealedCard);
-            if (idx < obs.Length) obs[idx] = 1f;
-        }
-
-        return obs;
-    }
-
-    // 소나 토큰 관찰 (44개)
-    //   [0~3]  : 플레이어별 사용 여부
-    //   [4~43] : 소나로 공개된 카드 원-핫 OR 합산
-    public float[] GetSonarObservation()
-    {
-        var players = GameManager.Instance.players;
-        float[] obs = new float[44];
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            SonarToken t = GetSonarToken(players[i]);
-            obs[i] = (t != null && t.isUsed) ? 1f : 0f;
-        }
-
-        foreach (SonarToken t in sonarTokens)
-        {
-            if (!t.isUsed || t.revealedCard == null) continue;
-            int idx = 4 + players[0].GetCardIndex(t.revealedCard);
-            if (idx < obs.Length) obs[idx] = 1f;
-        }
-
-        return obs;
-    }
+    public bool IsDistressSignalActive => distressSignal.isActive;
 
     // ---------------------------------------------------------------
     // UI용 조회
     // ---------------------------------------------------------------
-    public CommunicationToken GetCommToken(CrewAgent agent) =>
-        commTokens.Find(t => t.owner == agent);
+    public CommunicationToken GetCommToken(CrewAgent agent)
+        => commTokens.Find(t => t.owner == agent);
 
-    public SonarToken GetSonarToken(CrewAgent agent) =>
-        sonarTokens.Find(t => t.owner == agent);
 }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// 태스크 카드 → 스프라이트 매핑 ScriptableObject.
@@ -48,8 +49,37 @@ public class TaskSpriteMapping : ScriptableObject
     [Header("토큰 스프라이트")]
     public Sprite commTokenActive;   // Token_Comm_Active.png
     public Sprite commTokenUsed;     // Token_Comm_Used.png
-    public Sprite sonarToken;        // Token_Sonar.png
+    [FormerlySerializedAs("sonarToken")]
+    public Sprite distressSignalToken;  // Token_DistressSignal.png (조난신호)
     public Sprite commanderToken;    // Token_Commander.png
+
+    [Header("순서 토큰 스프라이트 (태스크 완수 순서 조건)")]
+    public Sprite tokenNumber1;   // Token_Number_1.png
+    public Sprite tokenNumber2;   // Token_Number_2.png
+    public Sprite tokenNumber3;   // Token_Number_3.png
+    public Sprite tokenNumber4;   // Token_Number_4.png
+    public Sprite tokenNumber5;   // Token_Number_5.png
+    public Sprite tokenOmega;     // Token_Omega.png  (Ω, 마지막)
+    public Sprite tokenArrow1;    // Token_Arrow_1.png  (→ before)
+    public Sprite tokenArrow2;    // Token_Arrow_2.png  (→→ after)
+    public Sprite tokenArrow3;    // Token_Arrow_3.png  (→→→)
+    public Sprite tokenArrow4;    // Token_Arrow_4.png  (→→→→)
+
+    // ── 순서 토큰 스프라이트 반환 ────────────────────────────────────
+    public Sprite GetOrderTokenSprite(OrderToken token) => token switch
+    {
+        OrderToken.N1     => tokenNumber1,
+        OrderToken.N2     => tokenNumber2,
+        OrderToken.N3     => tokenNumber3,
+        OrderToken.N4     => tokenNumber4,
+        OrderToken.N5     => tokenNumber5,
+        OrderToken.Omega  => tokenOmega,
+        OrderToken.Arrow1 => tokenArrow1,
+        OrderToken.Arrow2 => tokenArrow2,
+        OrderToken.Arrow3 => tokenArrow3,
+        OrderToken.Arrow4 => tokenArrow4,
+        _                 => null
+    };
 
     // ── 태스크에 맞는 스프라이트 반환 ────────────────────────────────
     public Sprite GetTaskSprite(TaskCard task)

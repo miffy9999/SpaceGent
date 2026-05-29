@@ -1398,9 +1398,9 @@ RectTransform:
   - {fileID: 1066381096}
   m_Father: {fileID: 1048487505}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 50, y: -50}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &369593606
@@ -1559,7 +1559,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4278512639
   m_fontColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -1572,7 +1572,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -3200,9 +3200,9 @@ RectTransform:
   - {fileID: 949094525}
   m_Father: {fileID: 1048487505}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 153, y: -50}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &767898781
@@ -3768,9 +3768,9 @@ RectTransform:
   - {fileID: 1617839827}
   m_Father: {fileID: 1048487505}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 256, y: -50}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &881042504
@@ -4297,7 +4297,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1048487505
 RectTransform:
   m_ObjectHideFlags: 0
@@ -4315,10 +4315,10 @@ RectTransform:
   - {fileID: 881042503}
   m_Father: {fileID: 1382717368}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 159, y: -16.125}
+  m_SizeDelta: {x: 306, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1048487506
 MonoBehaviour:
@@ -5774,7 +5774,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1382717368
 RectTransform:
   m_ObjectHideFlags: 0
@@ -8335,7 +8335,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2024757772
 RectTransform:
   m_ObjectHideFlags: 0
@@ -8350,10 +8350,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1382717368}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 128.49994, y: -16.125}
+  m_SizeDelta: {x: 252.99988, y: 30.25}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2024757773
 MonoBehaviour:
@@ -9007,11 +9007,7 @@ MonoBehaviour:
   - {fileID: 235447363}
   - {fileID: 1787551169}
   - {fileID: 1744915508}
-  sonarTokenIcons:
-  - {fileID: 2120151535}
-  - {fileID: 502688020}
-  - {fileID: 1841761644}
-  - {fileID: 654943082}
+  distressSignalIcon: {fileID: 0}
   tokenActiveColor: {r: 1, g: 1, b: 1, a: 1}
   tokenUsedColor: {r: 0.3, g: 0.3, b: 0.3, a: 0.5}
   commRevealCardImages:
@@ -9029,28 +9025,14 @@ MonoBehaviour:
   - {fileID: 271522666}
   - {fileID: 353202670}
   - {fileID: 996249981}
-  sonarRevealCardImages:
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  sonarRevealTexts:
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  sonarRevealPanels:
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
+  distressSignalPanel: {fileID: 0}
+  distressSignalStatusText: {fileID: 0}
   useCommTokenButton: {fileID: 2024757775}
-  useSonarButtons:
-  - {fileID: 369593608}
-  - {fileID: 767898783}
-  - {fileID: 881042506}
+  useDistressSignalButton: {fileID: 0}
+  skipDistressSignalButton: {fileID: 0}
   resultPanel: {fileID: 1311734263}
   resultText: {fileID: 1307338187}
+  restartButton: {fileID: 0}
   handCardParent: {fileID: 707523094}
   handCardPrefab: {fileID: 6989824743691225830, guid: 2d3832c6ec2c08a4281f4290312070d8, type: 3}
   aiCardCountTexts:
@@ -9180,27 +9162,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2293992581273220769, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BehaviorType
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2293992581273220769, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorObservationSize
-      value: 219
+      value: 257
       objectReference: {fileID: 0}
     - target: {fileID: 2293992581273220769, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorActionSize.Array.size
       value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 2293992581273220769, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
-      propertyPath: 'm_BrainParameters.VectorActionSize.Array.data[2]'
-      value: 4
-      objectReference: {fileID: 0}
-    - target: {fileID: 2293992581273220769, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.m_ActionSpec.BranchSizes.Array.size
       value: 3
-      objectReference: {fileID: 0}
-    - target: {fileID: 2293992581273220769, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
-      propertyPath: 'm_BrainParameters.m_ActionSpec.BranchSizes.Array.data[2]'
-      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 2574232662905844714, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -9243,48 +9217,36 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4222526385498157083, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
+      propertyPath: m_BehaviorType
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4222526385498157083, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorObservationSize
-      value: 219
+      value: 257
       objectReference: {fileID: 0}
     - target: {fileID: 4222526385498157083, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorActionSize.Array.size
       value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 4222526385498157083, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
-      propertyPath: 'm_BrainParameters.VectorActionSize.Array.data[2]'
-      value: 4
-      objectReference: {fileID: 0}
-    - target: {fileID: 4222526385498157083, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.m_ActionSpec.BranchSizes.Array.size
       value: 3
-      objectReference: {fileID: 0}
-    - target: {fileID: 4222526385498157083, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
-      propertyPath: 'm_BrainParameters.m_ActionSpec.BranchSizes.Array.data[2]'
-      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 5738473493467871465, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BehaviorType
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5738473493467871465, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorObservationSize
-      value: 219
+      value: 257
       objectReference: {fileID: 0}
     - target: {fileID: 5738473493467871465, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorActionSize.Array.size
       value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 5738473493467871465, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
-      propertyPath: 'm_BrainParameters.VectorActionSize.Array.data[2]'
-      value: 4
-      objectReference: {fileID: 0}
-    - target: {fileID: 5738473493467871465, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.m_ActionSpec.BranchSizes.Array.size
       value: 3
-      objectReference: {fileID: 0}
-    - target: {fileID: 5738473493467871465, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
-      propertyPath: 'm_BrainParameters.m_ActionSpec.BranchSizes.Array.data[2]'
-      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: uiManager
@@ -9300,27 +9262,19 @@ PrefabInstance:
       objectReference: {fileID: 11400000, guid: 45b5e419c86117445b427a57d04c2693, type: 2}
     - target: {fileID: 8274042862943962447, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BehaviorType
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8274042862943962447, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorObservationSize
-      value: 219
+      value: 257
       objectReference: {fileID: 0}
     - target: {fileID: 8274042862943962447, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorActionSize.Array.size
       value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 8274042862943962447, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
-      propertyPath: 'm_BrainParameters.VectorActionSize.Array.data[2]'
-      value: 4
-      objectReference: {fileID: 0}
-    - target: {fileID: 8274042862943962447, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.m_ActionSpec.BranchSizes.Array.size
       value: 3
-      objectReference: {fileID: 0}
-    - target: {fileID: 8274042862943962447, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
-      propertyPath: 'm_BrainParameters.m_ActionSpec.BranchSizes.Array.data[2]'
-      value: 4
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects:

@@ -1,54 +1,74 @@
 using UnityEngine;
 
 /// <summary>
-/// 소나 토큰: 다른 플레이어의 손패 카드 1장을 전원에게 공개한다.
-/// 통신 토큰(자기 카드 공개)과 달리 타인의 카드를 엿본다.
+/// 조난신호: 미션 시작 전(첫 트릭 전), 팀이 사용 결정하면
+/// 카드 한 장을 인접 플레이어에게 전달한다.
+/// 로켓(잠수함) 카드는 전달 불가.
+/// 사용 시 이번 미션의 시도 횟수 기록에 +1 패널티.
 /// </summary>
-public class SonarToken
+public class DistressSignal
 {
-    public CrewAgent owner;
-    public bool isUsed      = false;
-    public CrewAgent target = null;
-    public Card revealedCard = null;
+    public enum Direction { Left, Right }
 
-    public SonarToken(CrewAgent owner)
-    {
-        this.owner = owner;
-    }
+    public bool isActive   = false;  // 팀이 사용 결정한 상태 (토큰 앞면)
+    public bool isExecuted = false;  // 카드 전달 완료 여부
 
-    /// <summary>
-    /// target 플레이어의 손패 중 가장 높은 값 카드를 공개한다.
-    /// </summary>
-    public bool TryReveal(CrewAgent target)
-    {
-        if (isUsed)                          return false;
-        if (target == owner)                 return false;
-        if (target == null)                  return false;
-        if (target.hand.Count == 0)          return false;
-
-        // 가장 높은 값 카드 선택 (잠수함 제외)
-        Card best = null;
-        foreach (Card c in target.hand)
-        {
-            if (c.suit == Card.Suit.Submarine) continue;
-            if (best == null || c.value > best.value) best = c;
-        }
-
-        // 잠수함만 있으면 그냥 첫 번째 카드
-        if (best == null) best = target.hand[0];
-
-        this.target      = target;
-        revealedCard     = best;
-        isUsed           = true;
-
-        Debug.Log($"[Sonar] {owner.name} → {target.name}의 {best} 공개");
-        return true;
-    }
+    public CrewAgent passingPlayer = null;
+    public Card      cardToPass    = null;
+    public Direction direction     = Direction.Right;
 
     public void Reset()
     {
-        isUsed       = false;
-        target       = null;
-        revealedCard = null;
+        isActive       = false;
+        isExecuted     = false;
+        passingPlayer  = null;
+        cardToPass     = null;
+    }
+
+    public bool CanActivate(CrewAgent player, Card card)
+    {
+        if (isActive || isExecuted) return false;
+        if (card == null)           return false;
+        if (card.suit == Card.Suit.Submarine) return false; // 로켓 카드 전달 불가
+        return player.hand.Contains(card);
+    }
+
+    public bool Activate(CrewAgent player, Card card, Direction dir)
+    {
+        if (!CanActivate(player, card)) return false;
+        passingPlayer = player;
+        cardToPass    = card;
+        direction     = dir;
+        isActive      = true;
+        Debug.Log($"[조난신호] {player.name}이(가) {card}를 {dir}쪽에 전달 예약");
+        return true;
+    }
+
+    /// <summary>카드를 인접 플레이어에게 실제로 전달한다.</summary>
+    public bool Execute()
+    {
+        if (!isActive || isExecuted)             return false;
+        if (passingPlayer == null || cardToPass == null) return false;
+
+        var players   = GameManager.Instance.players;
+        int senderIdx = players.IndexOf(passingPlayer);
+        if (senderIdx < 0) return false;
+
+        int receiverIdx = direction == Direction.Left
+            ? (senderIdx - 1 + players.Count) % players.Count
+            : (senderIdx + 1)                 % players.Count;
+
+        CrewAgent receiver = players[receiverIdx];
+
+        if (!passingPlayer.hand.Remove(cardToPass))
+        {
+            Debug.LogWarning("[조난신호] 카드 전달 실패: 카드가 손패에 없음");
+            return false;
+        }
+        receiver.hand.Add(cardToPass);
+        isExecuted = true;
+
+        Debug.Log($"[조난신호] {passingPlayer.name} → {receiver.name}: {cardToPass} 전달 완료");
+        return true;
     }
 }

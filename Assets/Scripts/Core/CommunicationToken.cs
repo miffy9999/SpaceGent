@@ -26,9 +26,7 @@ public class CommunicationToken
     }
 
     /// <summary>
-    /// 손패에서 가장 높은 비-잠수함 카드를 골라 공개한다.
-    /// 실제 보드게임에서는 플레이어가 직접 고르지만,
-    /// 현재 구현에서는 AI가 자동으로 최고값 카드를 선택한다.
+    /// AI 자동 선택: 손패에서 통신 가능한 카드(최고/유일/최저) 중 가장 높은 값 카드를 공개한다.
     /// </summary>
     public bool TryReveal()
     {
@@ -38,17 +36,53 @@ public class CommunicationToken
         foreach (Card c in owner.hand)
         {
             if (c.suit == Card.Suit.Submarine) continue;
+            if (!IsValidCommunicationCard(c)) continue;  // 중간값 카드 제외
             if (best == null || c.value > best.value) best = c;
         }
 
         if (best == null) return false;
 
-        revealedCard = best;
+        revealedCard   = best;
         revealPosition = DeterminePosition(best);
-        isUsed = true;
+        isUsed         = true;
 
         Debug.Log($"[CommToken] {owner.name} → {best.suit} {best.value} 공개 ({revealPosition})");
         return true;
+    }
+
+    /// <summary>
+    /// 인간 플레이어용: 특정 카드를 지정하여 공개한다.
+    /// 로켓 카드 불가, 해당 무늬에서 최고/유일/최저 조건을 만족해야 한다.
+    /// </summary>
+    public bool TryReveal(Card card)
+    {
+        if (isUsed) return false;
+        if (card == null) return false;
+        if (card.suit == Card.Suit.Submarine) return false;
+        if (!owner.hand.Contains(card)) return false;
+        if (!IsValidCommunicationCard(card)) return false;
+
+        revealedCard   = card;
+        revealPosition = DeterminePosition(card);
+        isUsed         = true;
+
+        Debug.Log($"[CommToken] {owner.name} → {card.suit} {card.value} 공개 ({revealPosition})");
+        return true;
+    }
+
+    /// <summary>통신 가능 조건: 해당 무늬에서 최고값이거나, 유일하거나, 최저값이어야 한다.</summary>
+    public bool IsValidCommunicationCard(Card card)
+    {
+        if (card.suit == Card.Suit.Submarine) return false;
+        bool hasHigher = false, hasLower = false;
+        foreach (Card c in owner.hand)
+        {
+            if (c.suit != card.suit) continue;
+            if (c.value > card.value) hasHigher = true;
+            if (c.value < card.value) hasLower  = true;
+        }
+        // 더 높은 카드도 있고 더 낮은 카드도 있는 중간값 → 통신 불가
+        return !(hasHigher && hasLower);
     }
 
     private RevealPosition DeterminePosition(Card card)

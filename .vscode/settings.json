@@ -60,14 +60,14 @@
         "*.asset": "yaml",
         "*.meta": "yaml",
         "*.prefab": "yaml",
-        "*.unity": "yaml",
+        "*.unity": "yaml"
     },
     "explorer.fileNesting.enabled": true,
     "explorer.fileNesting.patterns": {
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "SeaAI.slnx",
+    "dotnet.defaultSolution": "SpaceGent.slnx",
     "dotrush.roslyn.projectOrSolutionFiles": [
         "c:\\Users\\reals\\Desktop\\내꺼\\대학\\2026-1\\캡스톤디자인\\작업폴더\\Divergent\\Divergent.slnx"
     ]

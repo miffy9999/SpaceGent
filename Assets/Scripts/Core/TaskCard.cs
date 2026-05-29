@@ -1,6 +1,26 @@
 using UnityEngine;
 
 /// <summary>
+/// 태스크 카드에 붙는 순서 토큰.
+/// 숫자 토큰(N1~N5, Omega)은 몇 번째로 완수해야 하는지,
+/// 화살표 토큰(Arrow1~4)은 상대적 순서를 지정한다.
+/// </summary>
+public enum OrderToken
+{
+    None   = 0,   // 제약 없음
+    N1     = 1,   // 1번째로 완수
+    N2     = 2,   // 2번째로 완수
+    N3     = 3,   // 3번째로 완수
+    N4     = 4,   // 4번째로 완수
+    N5     = 5,   // 5번째로 완수
+    Omega  = 6,   // 마지막으로 완수 (Ω)
+    Arrow1 = 7,   // → : Arrow2보다 먼저
+    Arrow2 = 8,   // →→ : Arrow1 이후, Arrow3 이전
+    Arrow3 = 9,   // →→→ : Arrow2 이후, Arrow4 이전
+    Arrow4 = 10,  // →→→→ : Arrow3 이후
+}
+
+/// <summary>
 /// 플레이어에게 배정되는 태스크 하나를 나타내는 데이터 클래스.
 /// </summary>
 [System.Serializable]
@@ -57,8 +77,12 @@ public class TaskCard
     // WinMoreSuitThan 전용 (targetSuit > suitB 여야 성공)
     public Card.Suit suitB = Card.Suit.Blue;
 
-    // 순서 토큰 (0=제약 없음, 1·2·3…=낮은 번호 순서대로 달성)
-    public int orderIndex = 0;
+    // 순서 토큰 (None=제약 없음)
+    public OrderToken orderToken = OrderToken.None;
+
+    // ML-Agents 관측용 하위 호환 (숫자 토큰 값, 없으면 0)
+    public int orderIndex => orderToken is >= OrderToken.N1 and <= OrderToken.N5
+                             ? (int)orderToken : 0;
 
     // 런타임 상태
     public CrewAgent assignedTo;
@@ -114,9 +138,24 @@ public class TaskCard
     // ---------------------------------------------------------------
     // 표시 텍스트
     // ---------------------------------------------------------------
+    public static string OrderTokenLabel(OrderToken t) => t switch
+    {
+        OrderToken.N1     => "[1] ",
+        OrderToken.N2     => "[2] ",
+        OrderToken.N3     => "[3] ",
+        OrderToken.N4     => "[4] ",
+        OrderToken.N5     => "[5] ",
+        OrderToken.Omega  => "[Ω] ",
+        OrderToken.Arrow1 => "[→] ",
+        OrderToken.Arrow2 => "[→→] ",
+        OrderToken.Arrow3 => "[→→→] ",
+        OrderToken.Arrow4 => "[→→→→] ",
+        _                 => ""
+    };
+
     public override string ToString()
     {
-        string o = orderIndex > 0 ? $"[{orderIndex}] " : "";
+        string o = OrderTokenLabel(orderToken);
         return type switch
         {
             TaskType.WinSpecificCard   => $"{o}{targetCard.suit} {targetCard.value} 트릭 획득",

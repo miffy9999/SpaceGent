@@ -16,8 +16,7 @@ public class CrewAgent : Agent
     [Header("카드 프리팹 (중앙 테이블 스폰용)")]
     public GameObject cardPrefab;
 
-    private int pendingCommAction  = 0;
-    private int pendingSonarTarget = 0;
+    private int pendingCommAction = 0;
 
     private TrickManager         trickManager => GameManager.Instance.trickManager;
     private CommunicationManager commManager  => GameManager.Instance.communicationManager;
@@ -40,8 +39,7 @@ public class CrewAgent : Agent
     // ---------------------------------------------------------------
     // 키보드 입력 (인간 플레이어)
     //   숫자 1~0 : 카드 선택
-    //   Space    : 통신 토큰 예약
-    //   Z/X/C    : 소나 토큰 대상 예약
+    //   Space    : 통신 토큰 사용 예약
     // ---------------------------------------------------------------
     void Update()
     {
@@ -50,10 +48,7 @@ public class CrewAgent : Agent
         var kb = UnityEngine.InputSystem.Keyboard.current;
         if (kb == null) return;
 
-        if (kb.spaceKey.wasPressedThisFrame) pendingCommAction  = 1;
-        if (kb.zKey.wasPressedThisFrame)     pendingSonarTarget = 1;
-        if (kb.xKey.wasPressedThisFrame)     pendingSonarTarget = 2;
-        if (kb.cKey.wasPressedThisFrame)     pendingSonarTarget = 3;
+        if (kb.spaceKey.wasPressedThisFrame) pendingCommAction = 1;
 
         int idx = -1;
         if      (kb.digit1Key.wasPressedThisFrame) idx = 0;
@@ -90,24 +85,145 @@ public class CrewAgent : Agent
             return;
         }
 
-        // 토큰 처리 (Space/Z/X/C로 예약된 경우)
-        if (pendingCommAction == 1)  { commManager.UseCommToken(this);          pendingCommAction  = 0; }
-        if (pendingSonarTarget > 0)  { commManager.UseSonarToken(this, pendingSonarTarget); pendingSonarTarget = 0; }
+        // Space로 예약된 통신 토큰 처리
+        if (pendingCommAction == 1) { commManager.UseCommToken(this); pendingCommAction = 0; }
 
         isMyTurn = false;
         PlayCard(index);
     }
 
-    // Heuristic은 AI 전용 (인간은 HumanDirectPlay를 사용)
+    // Heuristic — [rule_based + MCTS] HeuristicOnly 모드에서 호출.
+    //
+    //   역할 dispatch:
+    //     - 본인이 담당자(assignee) + env.mcts_assignee=1 → MCTSSearch
+    //     - 본인이 담당자(assignee)                       → AssigneeStrategy (rule-based)
+    //     - 본인이 도우미(helper)                         → HelperStrategy   (rule-based)
+    //
+    //   env 파라미터:
+    //     mcts_assignee   : 1이면 담당자가 MCTS 사용 (기본 0 = rule-based)
+    //     mcts_budget     : 총 iteration 수 (기본 500)
+    //     mcts_dets       : determinization 샘플 수 (기본 10)
     public override void Heuristic(in ActionBuffers actionsOut)
     {
-        // 인간 플레이어는 이 경로를 사용하지 않음
         var d = actionsOut.DiscreteActions;
-        d[0] = 0;
+        d.Clear();
+        if (trickManager != null && hand.Count > 0 && d.Length > 0)
+        {
+            int idx = -1;
+            var mm = MissionManager.Instance;
+            if (mm != null)
+            {
+                bool isAssignee = mm.IsPhase1Assignee(this);
+                if (isAssignee && IsMCTSAssigneeEnabled())
+                {
+                    idx = DecideWithMCTS(mm);
+                }
+                else
+                {
+                    idx = isAssignee
+                        ? mm.HeuristicAssigneeCardIndex(this)
+                        : mm.HeuristicHelperCardIndex(this);
+                }
+            }
+            if (idx < 0) idx = trickManager.SafestLegalCardIndex(this);
+
+            // follow-suit 최종 검증: 위반이면 SafestLegalCard로 교체
+            if (idx >= 0 && idx < hand.Count && !trickManager.IsValidPlay(this, hand[idx]))
+                idx = trickManager.SafestLegalCardIndex(this);
+
+            if (idx >= 0) d[0] = idx;
+        }
+        // d[1], d[2] (통신/소나): Clear로 0 (사용 안 함)
+    }
+
+    // ── MCTS 진입점 (담당자만 호출) ────────────────────────────────
+    //   활성화 우선순위: Inspector override > env parameter > 기본 false
+    private bool IsMCTSAssigneeEnabled()
+    {
+        var mm = MissionManager.Instance;
+        if (mm != null && mm.overrideMctsAssignee) return true;
+
+        var academy = Unity.MLAgents.Academy.Instance;
+        if (academy == null) return false;
+        return academy.EnvironmentParameters.GetWithDefault("mcts_assignee", 0f) > 0.5f;
+    }
+
+    private int DecideWithMCTS(MissionManager mm)
+    {
+        int budget, dets;
+        if (mm.overrideMctsAssignee)
+        {
+            budget = mm.overrideMctsBudget;
+            dets   = mm.overrideMctsDeterminizations;
+        }
+        else
+        {
+            var academy = Unity.MLAgents.Academy.Instance;
+            budget = Mathf.RoundToInt(academy.EnvironmentParameters.GetWithDefault("mcts_budget", 500f));
+            dets   = Mathf.RoundToInt(academy.EnvironmentParameters.GetWithDefault("mcts_dets",   10f));
+        }
+
+        var ctx = mm.BuildMCTSContext(this);
+        if (ctx == null || ctx.legalActionsInSelfHand == null
+            || ctx.legalActionsInSelfHand.Count == 0)
+            return -1;
+
+        return MCTSSearch.ChooseCard(ctx, budget, dets);
     }
 
     // ---------------------------------------------------------------
-    // AI 행동 처리 (Branch[0]=카드, Branch[1]=통신, Branch[2]=소나)
+    // 액션 마스킹
+    //   Branch 0: 카드 선택        (size 10)
+    //   Branch 1: 통신 토큰        (size 2 — 0=skip, 1=use)
+    //   Branch 2: 소나 토큰 타겟    (size 4 — 0=skip, 1/2/3=상대 인덱스)
+    // ---------------------------------------------------------------
+    public override void WriteDiscreteActionMask(IDiscreteActionMask actionMask)
+    {
+        // 안전망: 손패 0장이면 마스킹 스킵.
+        //   에피소드 종료 직후 재시작 대기 중 MLAgents SendInfo 사이클이 한 번 더 돌면서
+        //   이 함수를 호출할 수 있는데, 모든 액션 마스킹은 "All actions masked" 예외 유발.
+        if (hand.Count == 0) return;
+
+        // === Branch 0: 카드 ===
+        // 손패 범위 밖 인덱스 마스킹
+        for (int i = hand.Count; i < 10; i++)
+            actionMask.SetActionEnabled(0, i, false);
+
+        // follow-suit 위반 카드 마스킹 (유효 카드가 1장 이상 있을 때만)
+        if (trickManager != null)
+        {
+            bool hasValidCard = hand.Exists(c => trickManager.IsValidPlay(this, c));
+            if (hasValidCard)
+                for (int i = 0; i < hand.Count; i++)
+                    if (!trickManager.IsValidPlay(this, hand[i]))
+                        actionMask.SetActionEnabled(0, i, false);
+        }
+
+        // === Branch 1: 통신 토큰 ===
+        //   사용 가능 조건 (모두 만족해야 함):
+        //     1) CommunicationManager 존재
+        //     2) 트릭 사이 (IsBetweenTricks) — 룰북상 트릭 진행 중엔 통신 불가
+        //     3) 아직 사용하지 않음
+        //     4) 손에 비-잠수함 카드 1장 이상 (공개할 카드가 있어야 함)
+        bool canComm = commManager != null
+                       && trickManager != null
+                       && trickManager.IsBetweenTricks
+                       && !commManager.HasUsedCommToken(this)
+                       && hand.Exists(c => c.suit != Card.Suit.Submarine);
+        if (!canComm)
+            actionMask.SetActionEnabled(1, 1, false);
+
+        // === Branch 2: 미사용 (조난신호는 트릭 전 단계에서 별도 처리) ===
+        actionMask.SetActionEnabled(2, 1, false);
+        actionMask.SetActionEnabled(2, 2, false);
+        actionMask.SetActionEnabled(2, 3, false);
+    }
+
+    // ---------------------------------------------------------------
+    // AI 행동 처리
+    //   Branch 0: 카드 인덱스
+    //   Branch 1: 통신 토큰 사용 (0/1)
+    //   Branch 2: 미사용 (0으로 고정)
     // ---------------------------------------------------------------
     public override void OnActionReceived(ActionBuffers actions)
     {
@@ -115,29 +231,36 @@ public class CrewAgent : Agent
         if (hand.Count == 0) { isMyTurn = false; return; }
 
         var d = actions.DiscreteActions;
-        int cardIndex   = d[0];
-        int useComm     = d.Length > 1 ? d[1] : 0;
-        int sonarTarget = d.Length > 2 ? d[2] : 0;
+        int cardIndex  = d[0];
+        int commAction = d.Length > 1 ? d[1] : 0;
 
-        if (useComm == 1 && !commManager.UseCommToken(this))
-            AddReward(-0.1f);
+        if (commAction == 1 && commManager != null)
+            commManager.UseCommToken(this);
 
-        if (sonarTarget > 0 && !commManager.UseSonarToken(this, sonarTarget))
-            AddReward(-0.1f);
-
+        // 범위 보정
         if (cardIndex < 0 || cardIndex >= hand.Count)
-        {
-            AddReward(-1.0f);
             cardIndex = 0;
+
+        // [rule_based] override를 먼저 적용 — rule-based 함수는 항상 valid 카드를 반환
+        if (MissionManager.Instance != null)
+        {
+            int overrideIdx = MissionManager.Instance.RuleBasedHelperCardIndex(this);
+            if (overrideIdx >= 0) cardIndex = overrideIdx;
         }
 
-        Card cardToPlay = hand[cardIndex];
-        if (!trickManager.IsValidPlay(this, cardToPlay))
+        // follow-suit 최종 검증 — 여기까지 왔는데도 위반이면 진짜 마스킹 누락
+        if (!trickManager.IsValidPlay(this, hand[cardIndex]))
         {
-            AddReward(-1.0f);
             int validIdx = hand.FindIndex(c => trickManager.IsValidPlay(this, c));
             if (validIdx >= 0) cardIndex = validIdx;
-            Debug.Log($"[{gameObject.name}] 규칙 위반 → {(validIdx >= 0 ? $"카드[{validIdx}]로 대체" : "대체 불가")}");
+            Debug.LogWarning($"[{gameObject.name}] follow-suit 위반 (최종 보정), 카드[{cardIndex}]로 대체");
+        }
+
+        // [Phase1] 협력 계측/보상: 제출 직전 평가 (hand 온전한 상태)
+        if (MissionManager.Instance != null)
+        {
+            var (couldWin, hadSafe) = trickManager.EvaluatePlay(this, hand[cardIndex]);
+            MissionManager.Instance.RecordHelperPlay(this, couldWin, hadSafe);
         }
 
         isMyTurn = false;
@@ -182,13 +305,18 @@ public class CrewAgent : Agent
     }
 
     // ---------------------------------------------------------------
-    // 관찰 (Observation) — 총 219개
+    // 관찰 (Observation) — 총 257개
+    //   40 (손패) + 40 (테이블) + 5 (리드) + 162 (팀 태스크 4명분)
+    //   + 4 (손패 수) + 4 (현재 트릭 승리 수)
+    //   + 2 (Phase1 역할: 내가 담당자인가 / 담당자 잔여 트릭 수)
     // ---------------------------------------------------------------
+    public const int ObservationSize = 257;
+
     public override void CollectObservations(VectorSensor sensor)
     {
         if (GameManager.Instance == null)
         {
-            sensor.AddObservation(new float[219]);
+            sensor.AddObservation(new float[ObservationSize]);
             return;
         }
 
@@ -211,27 +339,35 @@ public class CrewAgent : Agent
             leadObs[(int)tm.leadSuit] = 1f;
         foreach (float f in leadObs) sensor.AddObservation(f);
 
-        // 4. 내 태스크 (42)
+        // 4. 팀 태스크 (162) — viewer 기준 시계방향 4명분
         float[] taskObs = MissionManager.Instance != null
-            ? MissionManager.Instance.GetTaskObservation(this)
-            : new float[42];
+            ? MissionManager.Instance.GetTaskObservationFor(this)
+            : new float[162];
         foreach (float f in taskObs) sensor.AddObservation(f);
 
-        // 5. 손패 수 (4)
-        foreach (var p in GameManager.Instance.players)
-            sensor.AddObservation(p.hand.Count / 10f);
+        // 5. 손패 수 (4) — viewer 기준 시계방향
+        var players = GameManager.Instance.players;
+        int selfIdx = players.IndexOf(this);
+        if (selfIdx < 0) selfIdx = 0;
+        for (int i = 0; i < players.Count; i++)
+        {
+            int idx = (selfIdx + i) % players.Count;
+            sensor.AddObservation(players[idx].hand.Count / 10f);
+        }
 
-        // 6. 통신 토큰 (44)
-        float[] commObs = commManager != null
-            ? commManager.GetCommObservation()
-            : new float[44];
-        foreach (float f in commObs) sensor.AddObservation(f);
+        // 6. 현재 트릭 승리 수 (4) — viewer 기준 시계방향
+        //   count 기반 태스크(WinAtLeast 등)의 진척을 에이전트가 인지하도록.
+        var mm = MissionManager.Instance;
+        for (int i = 0; i < players.Count; i++)
+        {
+            int idx = (selfIdx + i) % players.Count;
+            int wins = mm != null ? mm.GetTrickWinCount(players[idx]) : 0;
+            sensor.AddObservation(wins / 10f);
+        }
 
-        // 7. 소나 토큰 (44)
-        float[] sonarObs = commManager != null
-            ? commManager.GetSonarObservation()
-            : new float[44];
-        foreach (float f in sonarObs) sensor.AddObservation(f);
+        // 7. 역할 명시 (2) — Phase1에서 정책이 역할을 쉽게 조건화하도록
+        sensor.AddObservation((mm != null && mm.IsPhase1Assignee(this)) ? 1f : 0f);
+        sensor.AddObservation(mm != null ? mm.Phase1AssigneeRemaining() / 10f : 0f);
     }
 
     // ---------------------------------------------------------------

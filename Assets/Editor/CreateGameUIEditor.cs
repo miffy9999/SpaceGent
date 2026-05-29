@@ -51,9 +51,9 @@ public static class CreateGameUIEditor
     static readonly Color BgMid    = new Color(0.08f, 0.12f, 0.20f, 0.90f);
     static readonly Color BgSlot   = new Color(0.06f, 0.10f, 0.17f, 0.95f);
     static readonly Color BgHuman  = new Color(0.04f, 0.10f, 0.06f, 0.95f);
-    static readonly Color ColComm  = new Color(0.30f, 0.75f, 1.00f, 1.00f);
-    static readonly Color ColSonar = new Color(1.00f, 0.80f, 0.20f, 1.00f);
-    static readonly Color ColTxt   = new Color(0.92f, 0.95f, 1.00f, 1.00f);
+    static readonly Color ColComm     = new Color(0.30f, 0.75f, 1.00f, 1.00f);
+    static readonly Color ColDistress = new Color(1.00f, 0.40f, 0.20f, 1.00f);
+    static readonly Color ColTxt      = new Color(0.92f, 0.95f, 1.00f, 1.00f);
     static readonly Color ColHuman = new Color(0.35f, 1.00f, 0.55f, 1.00f);
 
     static TMP_FontAsset _font;
@@ -90,16 +90,11 @@ public static class CreateGameUIEditor
 
         // 배열 초기화
         ui.commTokenIcons          = new Image[4];
-        ui.sonarTokenIcons         = new Image[4];
         ui.playerTurnHighlights    = new Image[4];
         ui.commRevealPanels        = new GameObject[4];
         ui.commRevealCardImages    = new Image[4];
         ui.commRevealPositionTexts = new TMP_Text[4];
-        ui.sonarRevealPanels       = new GameObject[4];
-        ui.sonarRevealCardImages   = new Image[4];
-        ui.sonarRevealTexts        = new TMP_Text[4];
         ui.aiCardCountTexts        = new TMP_Text[3];
-        ui.useSonarButtons         = new Button[3];
         ui.playerTaskParents       = new Transform[4];
 
         Transform R = canvas.transform;
@@ -290,14 +285,6 @@ public static class CreateGameUIEditor
         MakeLabel(tokenRowGO.transform, "CommLabel", "통신", 11,
             new Color(ColComm.r, ColComm.g, ColComm.b, 0.85f), 28f);
 
-        Spacer(tokenRowGO.transform, 6f);
-
-        // 소나 토큰 아이콘 + 레이블
-        MakeTokenIcon(tokenRowGO.transform, "SonarTokenIcon", ColSonar, out var sonarImg);
-        ui.sonarTokenIcons[playerIndex] = sonarImg;
-        MakeLabel(tokenRowGO.transform, "SonarLabel", "소나", 11,
-            new Color(ColSonar.r, ColSonar.g, ColSonar.b, 0.85f), 28f);
-
         // AI: 카드 수 텍스트
         if (!isHuman && uiAiIndex >= 0)
         {
@@ -381,26 +368,15 @@ public static class CreateGameUIEditor
                 Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             ui.useCommTokenButton = commBtnGO.GetComponent<Button>();
 
-            // 소나 버튼 3개 묶음
-            var sonarRowGO = new GameObject("SonarBtnRow", typeof(RectTransform));
-            sonarRowGO.transform.SetParent(btnArea.transform, false);
-            var srHG = sonarRowGO.AddComponent<HorizontalLayoutGroup>();
-            srHG.spacing              = 3f;
-            srHG.childForceExpandWidth  = true;
-            srHG.childForceExpandHeight = true;
-
-            for (int j = 0; j < 3; j++)
-            {
-                var sbGO = new GameObject($"SonarBtn{j + 1}",
-                    typeof(RectTransform), typeof(Image), typeof(Button));
-                sbGO.transform.SetParent(sonarRowGO.transform, false);
-                sbGO.GetComponent<Image>().color = new Color(0.80f, 0.60f, 0.10f, 1f);
-                Txt(sbGO.transform, "L", $"소나{j + 1}", 10, Color.black,
-                    TextAlignmentOptions.Center,
-                    Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-                if (j < ui.useSonarButtons.Length)
-                    ui.useSonarButtons[j] = sbGO.GetComponent<Button>();
-            }
+            // 조난신호 버튼 (건너뛰기)
+            var skipBtnGO = new GameObject("SkipBtn",
+                typeof(RectTransform), typeof(Image), typeof(Button));
+            skipBtnGO.transform.SetParent(btnArea.transform, false);
+            skipBtnGO.GetComponent<Image>().color = new Color(0.5f, 0.5f, 0.5f, 0.8f);
+            Txt(skipBtnGO.transform, "L", "건너뛰기", 10, Color.white,
+                TextAlignmentOptions.Center,
+                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            ui.skipDistressSignalButton = skipBtnGO.GetComponent<Button>();
         }
     }
 
