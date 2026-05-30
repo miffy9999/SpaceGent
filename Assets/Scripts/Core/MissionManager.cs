@@ -134,6 +134,11 @@ public class MissionManager : MonoBehaviour
         // WinSpecificCard 태스크 풀 생성 (미배정) — 드래프트로 배정
         GenerateTaskPool(taskCount, captainIndex);
 
+        // [커리큘럼] 순서 토큰 활성화 시 순차 N1..Nk 부여 (enforce 로직은 이미 존재).
+        //   Phase A 기본 0 → 토큰 없음. Phase B에서 num_tasks≥2와 함께 켠다.
+        if (ep.GetWithDefault("enable_order_tokens", 0f) > 0.5f)
+            AssignSequentialOrderTokens();
+
         // 선택 순서: 함장(로켓4 소지자)부터 시계방향
         selectionOrder.Clear();
         for (int i = 0; i < players.Count; i++)
@@ -162,6 +167,13 @@ public class MissionManager : MonoBehaviour
             if (task.targetCard != null)
                 used.Add(task.targetCard);
         }
+    }
+
+    // [커리큘럼] 풀의 앞쪽 태스크부터 순차로 N1..N5 순서 토큰 부여 (enforce는 IsOrderTokenValid에 이미 존재).
+    private void AssignSequentialOrderTokens()
+    {
+        for (int i = 0; i < taskPool.Count && i < 5; i++)
+            taskPool[i].orderToken = (OrderToken)((int)OrderToken.N1 + i);
     }
 
     // ---------------------------------------------------------------
@@ -712,12 +724,19 @@ public class MissionManager : MonoBehaviour
     //   (viewer 기준 시계방향)
     //   slot[b+0] targetCard.suit  (/ 4)
     //   slot[b+1] targetCard.value (/ 9)
-    //   slot[b+2] orderIndex (/ 5)
+    //   slot[b+2] orderToken 전체 (None~Arrow4) (/ 10)
     //   slot[b+3] isCompleted
     //   slot[b+4] isFailed
     //   slot[b+5..9] 예비 (0)
     // ---------------------------------------------------------------
     public const int TaskObservationSize = 162;
+
+    // 특수 규칙 관찰 (16, 예약) — mission-level. Phase A엔 전부 0, Phase B/C에서 채움.
+    //   계획 레이아웃: [0]데드존 [1]통신차단 활성 [2]통신가능트릭(/10)
+    //   [3]사령관 결정 [4]사령관 분배 [5]"9 트릭불가" [6]"로켓 승리불가"
+    //   [7]"로켓 오름차순" [8]"첫·마지막만" [9]"2트릭차 금지" [10..15]예비
+    public const int SpecialRuleObsSize = 16;
+    public float[] GetSpecialRuleObs() => new float[SpecialRuleObsSize];
 
     public float[] GetTaskObservationFor(CrewAgent viewer)
     {
@@ -740,7 +759,7 @@ public class MissionManager : MonoBehaviour
                 int b = (p * 4 + slot) * 10;
                 obs[b + 0] = task.targetCard != null ? (int)task.targetCard.suit / 4f : 0f;
                 obs[b + 1] = task.targetCard != null ? task.targetCard.value / 9f    : 0f;
-                obs[b + 2] = task.orderIndex / 5f;
+                obs[b + 2] = (int)task.orderToken / 10f;   // 순서토큰 전체(None~Arrow4)
                 obs[b + 3] = task.isCompleted ? 1f : 0f;
                 obs[b + 4] = task.isFailed    ? 1f : 0f;
                 // obs[b + 5..9] : 예비 (0으로 유지)

@@ -341,16 +341,18 @@ public class CrewAgent : Agent
     }
 
     // ---------------------------------------------------------------
-    // 관찰 (Observation) — 총 257개 (벡터 크기 불변)
+    // 관찰 (Observation) — 총 297개 (최종 레이아웃: 커리큘럼 조건을 env로 켜고 끄도록 슬롯 예약)
     //   40 (손패) + 40 (테이블 / 선택 페이즈엔 task 풀 슬롯) + 5 (리드)
-    //   + 162 (팀 태스크 4명분) + 4 (손패 수) + 4 (현재 트릭 승리 수)
-    //   + 2 (플래그: [0]선택페이즈인가 / [1]선택중=패스가능·플레이중=내task타깃보유)
+    //   + 162 (팀 태스크 4명분, 슬롯 +2=순서토큰 전체) + 4 (손패 수) + 4 (트릭 승리 수)
+    //   + 2 (플래그: [0]선택페이즈 / [1]선택중=패스가능·플레이중=내task타깃보유)
+    //   + 24 (통신: viewer 기준 4명 × [사용,공개suit/4,공개value/9,高,唯,低])
+    //   + 16 (특수규칙 예약 — Phase A엔 0, 커리큘럼에서 채움)
     //
     //   선택(드래프트) 페이즈에는 비어있는 '테이블 40칸'을 풀 슬롯 인코딩으로 재사용:
     //     슬롯 j(0..9): [targetSuit/4, targetValue/9, 내가보유, 점유] (4칸 × 10)
-    //   → 액션 Branch[0]=j 가 이 슬롯 j에 대응. 벡터/액션 공간 변경 없음(씬 편집 불필요).
+    //   → 액션 Branch[0]=j 가 이 슬롯 j에 대응. 액션 공간 [10,2,4]는 불변.
     // ---------------------------------------------------------------
-    public const int ObservationSize = 257;
+    public const int ObservationSize = 297;
 
     public override void CollectObservations(VectorSensor sensor)
     {
@@ -434,6 +436,25 @@ public class CrewAgent : Agent
             sensor.AddObservation(mm != null && mm.CanCurrentPickerPass() ? 1f : 0f);
         else
             sensor.AddObservation(mm != null && mm.HoldsOwnTaskTarget(this) ? 1f : 0f);
+
+        // 8. 통신 (24) — viewer 기준 시계방향 4명 × [사용, 공개suit/4, 공개value/9, 高, 唯, 低]
+        var cm = GameManager.Instance.communicationManager;
+        for (int i = 0; i < players.Count; i++)
+        {
+            int idx = (selfIdx + i) % players.Count;
+            var ct = cm != null ? cm.GetCommToken(players[idx]) : null;
+            bool used = ct != null && ct.isUsed && ct.revealedCard != null;
+            sensor.AddObservation(used ? 1f : 0f);
+            sensor.AddObservation(used ? (int)ct.revealedCard.suit / 4f : 0f);
+            sensor.AddObservation(used ? ct.revealedCard.value / 9f : 0f);
+            sensor.AddObservation(used && ct.revealPosition == CommunicationToken.RevealPosition.Highest ? 1f : 0f);
+            sensor.AddObservation(used && ct.revealPosition == CommunicationToken.RevealPosition.Only    ? 1f : 0f);
+            sensor.AddObservation(used && ct.revealPosition == CommunicationToken.RevealPosition.Lowest  ? 1f : 0f);
+        }
+
+        // 9. 특수 규칙 (16, 예약) — mission-level. Phase A엔 0, 커리큘럼에서 채움.
+        float[] sr = mm != null ? mm.GetSpecialRuleObs() : new float[MissionManager.SpecialRuleObsSize];
+        foreach (float f in sr) sensor.AddObservation(f);
     }
 
     // ---------------------------------------------------------------
