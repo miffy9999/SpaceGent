@@ -167,8 +167,7 @@ public class MCTSContext
     public int firstTrickWinner;
     public int lastTrickWinner;                          // 보통 -1 (마지막 트릭 진행 중에만 set)
     public int assigneeIdx;
-    public MissionManager.Phase1Task taskType;
-    public int winTarget;
+    public Card targetCard;          // 담당자가 이 카드가 든 트릭을 이겨야 함 (WinSpecificCard)
     public bool taskCompleted;
     public bool taskFailed;
     public HashSet<Card.Suit>[] knownVoids;              // [playerCount] 각자 void suit
@@ -192,8 +191,7 @@ public class MCTSContext
             firstTrickWinner = firstTrickWinner,
             lastTrickWinner  = lastTrickWinner,
             assigneeIdx     = assigneeIdx,
-            taskType        = taskType,
-            winTarget       = winTarget,
+            targetCard      = targetCard,
             taskCompleted   = taskCompleted,
             taskFailed      = taskFailed,
         };

@@ -366,8 +366,10 @@ public class CrewAgent : Agent
         }
 
         // 7. 역할 명시 (2) — Phase1에서 정책이 역할을 쉽게 조건화하도록
+        //   [0] 내가 담당자인가  [1] 내가 타깃 카드를 보유 중인가(담당자/도우미 협력 판단용)
         sensor.AddObservation((mm != null && mm.IsPhase1Assignee(this)) ? 1f : 0f);
-        sensor.AddObservation(mm != null ? mm.Phase1AssigneeRemaining() / 10f : 0f);
+        Card tgt = mm != null ? mm.CurrentTargetCard() : null;
+        sensor.AddObservation(tgt != null && hand.Contains(tgt) ? 1f : 0f);
     }
 
     // ---------------------------------------------------------------

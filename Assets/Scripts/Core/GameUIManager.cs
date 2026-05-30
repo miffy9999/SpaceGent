@@ -866,9 +866,10 @@ public class GameUIManager : MonoBehaviour
                     btn.onClick.AddListener(() => MissionManager.Instance.HumanPickTask(capturedIndex));
             }
 
-            // 배경색
+            // 배경색 (WinSpecificCard 단일 타입 — 고정 색상)
             if (item.TryGetComponent<Image>(out var bg))
-                bg.color = tsm != null ? new Color(0.1f, 0.12f, 0.18f, 0.92f) : TaskTypeColor(task.type);
+                bg.color = tsm != null ? new Color(0.1f, 0.12f, 0.18f, 0.92f)
+                                       : new Color(0.2f, 0.5f, 1f, 0.85f);
 
             // 순서 토큰 배지 (orderIndex > 0인 태스크)
             if (task.orderIndex > 0)
@@ -938,17 +939,5 @@ public class GameUIManager : MonoBehaviour
         tmp.raycastTarget = false;
 
         return go;
-    }
-
-    private Color TaskTypeColor(TaskCard.TaskType type)
-    {
-        return type switch
-        {
-            TaskCard.TaskType.WinSpecificCard => new Color(0.2f, 0.5f, 1f, 0.85f),
-            TaskCard.TaskType.WinTrickCount => new Color(0.2f, 0.8f, 0.4f, 0.85f),
-            TaskCard.TaskType.WinFirst => new Color(1f, 0.8f, 0.1f, 0.85f),
-            TaskCard.TaskType.WinNone => new Color(0.7f, 0.2f, 0.2f, 0.85f),
-            _ => Color.gray
-        };
     }
 }

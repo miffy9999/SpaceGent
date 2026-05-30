@@ -1,10 +1,13 @@
 using System.Collections.Generic;
 
 // =====================================================================
-//  MCTSState — The Crew Phase1_CoopSingle 게임 상태의 스냅샷.
+//  MCTSState — The Crew(스페이스 크루) Phase1 게임 상태의 스냅샷.
 // ---------------------------------------------------------------------
 //  Determinized state (모든 손패 알려짐). Clone/transition 가능.
 //  실제 게임 인스턴스(TrickManager/MissionManager)와 독립 — 시뮬레이션 전용.
+//
+//  Task = WinSpecificCard: "지정된 카드(targetCard)가 포함된 트릭을 담당자가 이겨라."
+//    targetCard가 깔린 트릭의 승자가 담당자면 완료, 아니면 실패 (즉시 결판).
 // =====================================================================
 public class MCTSState
 {
@@ -14,7 +17,7 @@ public class MCTSState
     // 현재 트릭 상태
     public List<Card> cardsOnTable = new List<Card>();
     public List<int>  playersOnTable = new List<int>();
-    public Card.Suit  leadSuit = Card.Suit.Rocket;   // 빈 상태 = Sub로 초기화
+    public Card.Suit  leadSuit = Card.Suit.Rocket;   // 빈 상태 = Rocket로 초기화
 
     // 차례 (player index)
     public int currentPlayer;
@@ -26,10 +29,9 @@ public class MCTSState
     public int firstTrickWinner = -1;
     public int lastTrickWinner  = -1;
 
-    // Task 정보
-    public int assigneeIdx;
-    public MissionManager.Phase1Task taskType;
-    public int winTarget;
+    // Task 정보 (WinSpecificCard)
+    public int  assigneeIdx;
+    public Card targetCard;          // 담당자가 이 카드가 든 트릭을 이겨야 함
     public bool taskCompleted;
     public bool taskFailed;
 
@@ -52,8 +54,7 @@ public class MCTSState
         c.firstTrickWinner = firstTrickWinner;
         c.lastTrickWinner  = lastTrickWinner;
         c.assigneeIdx    = assigneeIdx;
-        c.taskType       = taskType;
-        c.winTarget      = winTarget;
+        c.targetCard     = targetCard;
         c.taskCompleted  = taskCompleted;
         c.taskFailed     = taskFailed;
         return c;
@@ -148,7 +149,8 @@ public class MCTSState
             if (hands[i].Count > 0) { allEmpty = false; break; }
         if (allEmpty) lastTrickWinner = winner;
 
-        EvaluateTaskAfterTrick(winner, isFirst, allEmpty);
+        // task 평가 — cardsOnTable이 아직 이번 트릭 카드를 담고 있을 때(clear 전) 호출
+        EvaluateTaskAfterTrick(winner);
 
         // 다음 트릭 셋업
         cardsOnTable.Clear();
@@ -159,40 +161,16 @@ public class MCTSState
     }
 
     // ---------------------------------------------------------------
-    // 트릭 후 task 평가 (즉시 completed/failed 판정)
+    // 트릭 후 task 평가 (WinSpecificCard 즉시 판정)
+    //   이번 트릭에 targetCard가 포함되었으면, 승자가 담당자인지로 완료/실패 결판.
     // ---------------------------------------------------------------
-    private void EvaluateTaskAfterTrick(int winner, bool isFirstTrick, bool isLastTrick)
+    private void EvaluateTaskAfterTrick(int winner)
     {
-        switch (taskType)
-        {
-            case MissionManager.Phase1Task.WinFirst:
-                if (isFirstTrick)
-                {
-                    if (winner == assigneeIdx) taskCompleted = true;
-                    else taskFailed = true;
-                }
-                break;
+        if (targetCard == null) return;
+        if (!cardsOnTable.Contains(targetCard)) return;
 
-            case MissionManager.Phase1Task.WinNone:
-                if (winner == assigneeIdx) taskFailed = true;
-                break;
-
-            case MissionManager.Phase1Task.WinLast:
-                if (isLastTrick)
-                {
-                    if (winner == assigneeIdx) taskCompleted = true;
-                    else taskFailed = true;
-                }
-                break;
-
-            case MissionManager.Phase1Task.WinAtLeast:
-                if (isLastTrick)
-                {
-                    if (trickWinCounts[assigneeIdx] >= winTarget) taskCompleted = true;
-                    else taskFailed = true;
-                }
-                break;
-        }
+        if (winner == assigneeIdx) taskCompleted = true;
+        else                       taskFailed    = true;
     }
 
     // ---------------------------------------------------------------
@@ -209,12 +187,13 @@ public class MCTSState
     // ---------------------------------------------------------------
     // Reward (terminal 시): task 성공 1.0 / 실패 0.0
     //   협력 게임: 모든 플레이어 동일 보상.
+    //   targetCard는 36장 색깔 카드 중 하나로 항상 분배되므로 핸드가 끝나면
+    //   반드시 completed/failed 중 하나로 결판난다.
     // ---------------------------------------------------------------
     public float Reward()
     {
         if (taskCompleted) return 1.0f;
-        if (taskFailed)    return 0.0f;
-        return 0.0f;  // 핸드 끝났는데 평가 안 됐으면 실패로 간주 (정상 흐름이면 도달 X)
+        return 0.0f;
     }
 
     // ---------------------------------------------------------------
@@ -222,11 +201,11 @@ public class MCTSState
     // ---------------------------------------------------------------
     public bool Beats(Card a, Card b)
     {
-        bool aSub = a.suit == Card.Suit.Rocket;
-        bool bSub = b.suit == Card.Suit.Rocket;
-        if (aSub && !bSub) return true;
-        if (aSub && bSub)  return a.value > b.value;
-        if (!aSub && bSub) return false;
+        bool aRkt = a.suit == Card.Suit.Rocket;
+        bool bRkt = b.suit == Card.Suit.Rocket;
+        if (aRkt && !bRkt) return true;
+        if (aRkt && bRkt)  return a.value > b.value;
+        if (!aRkt && bRkt) return false;
         bool aLead = a.suit == leadSuit;
         bool bLead = b.suit == leadSuit;
         if (aLead && !bLead) return true;
@@ -240,7 +219,19 @@ public class MCTSState
     public int WinStrength(Card c)
     {
         if (c.suit == Card.Suit.Rocket) return 200 + c.value;
-        if (c.suit == leadSuit)            return 100 + c.value;
+        if (c.suit == leadSuit)         return 100 + c.value;
         return c.value;
+    }
+
+    // ---------------------------------------------------------------
+    // 현재 테이블에서 이기고 있는 플레이어 index (빈 테이블이면 -1)
+    // ---------------------------------------------------------------
+    public int CurrentWinnerPlayer()
+    {
+        if (cardsOnTable.Count == 0) return -1;
+        int bestPos = 0;
+        for (int i = 1; i < cardsOnTable.Count; i++)
+            if (Beats(cardsOnTable[i], cardsOnTable[bestPos])) bestPos = i;
+        return playersOnTable[bestPos];
     }
 }
