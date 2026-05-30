@@ -16,6 +16,20 @@ public class GameManager : MonoBehaviour
     [Header("Players (0번 = 인간, 1~3번 = AI)")]
     public List<CrewAgent> players = new List<CrewAgent>();
 
+    public enum PlayMode
+    {
+        HumanVsAI,    // player[0] = 인간 (마우스/키보드 선택)
+        Simulation,   // 전원 AI — 인간 입력 없이 빠르게 자동 진행 (시뮬/평가/학습)
+    }
+
+    [Header("플레이 모드 (시뮬레이션 = 전원 AI 자동)")]
+    [Tooltip("Simulation: player[0]도 AI로 동작해 인간 선택 없이 빠르게 진행.\nHumanVsAI: player[0]이 인간 플레이어.")]
+    public PlayMode playMode = PlayMode.HumanVsAI;
+
+    // 인간 플레이어가 실제로 활성인지 (Simulation·배치모드면 false)
+    public bool HasInteractiveHuman =>
+        playMode == PlayMode.HumanVsAI && !Application.isBatchMode;
+
     [Header("공용 테이블 (카드가 모이는 중앙 오브젝트)")]
     public Transform centerBoard;
 
@@ -55,13 +69,15 @@ public class GameManager : MonoBehaviour
         deckManager.players  = players;
         trickManager.players = players;
 
-        // 배치 모드(서버 학습)에서는 전원 AI.
-        // 일반 실행 시에는 player[0]이 인간 — 단, player[0]도 HeuristicOnly로 설정된 경우
-        // all-rule-based 시뮬레이션 모드로 간주하고 AI로 동작 (키보드 대기 안 함).
+        // 인간 플레이어 결정:
+        //   - Simulation 모드 또는 배치(서버 학습) → 전원 AI (인간 입력 대기 없음)
+        //   - HumanVsAI 모드 + 비배치 + player[0]이 HeuristicOnly가 아님 → player[0] 인간
         bool player0Heuristic = players.Count > 0 &&
             players[0].GetComponent<BehaviorParameters>()?.BehaviorType == BehaviorType.HeuristicOnly;
-        if (!Application.isBatchMode && players.Count > 0 && !player0Heuristic)
+        if (HasInteractiveHuman && players.Count > 0 && !player0Heuristic)
             players[0].isHumanPlayer = true;
+        else if (players.Count > 0)
+            players[0].isHumanPlayer = false;   // 시뮬레이션: player[0]도 AI
 
         // [A2] helpers가 씬에서 HeuristicOnly로 설정된 경우 PPO 단일 에이전트 모드
         //   BehaviorType 런타임 변경은 Academy 초기화 이후라 Python에 전달 안 됨 → 씬에서 사전 설정 필요

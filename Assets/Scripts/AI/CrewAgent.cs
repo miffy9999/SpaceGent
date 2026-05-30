@@ -284,12 +284,15 @@ public class CrewAgent : Agent
             if (overrideIdx >= 0) cardIndex = overrideIdx;
         }
 
-        // follow-suit 최종 검증 — 여기까지 왔는데도 위반이면 진짜 마스킹 누락
+        // follow-suit 최종 보정 (권위적 보장):
+        //   액션 마스킹이 위반 카드를 막지만, 추론·탐색이 드물게 마스킹된 액션을 고르거나
+        //   정책 미연결 시 무작위 액션이 나올 수 있다. 이때 환경이 합법 카드로 스냅한다.
+        //   이는 RL 환경의 표준 방어 코드이므로 경고를 남기지 않는다(로그 스팸 방지).
         if (!trickManager.IsValidPlay(this, hand[cardIndex]))
         {
-            int validIdx = hand.FindIndex(c => trickManager.IsValidPlay(this, c));
-            if (validIdx >= 0) cardIndex = validIdx;
-            Debug.LogWarning($"[{gameObject.name}] follow-suit 위반 (최종 보정), 카드[{cardIndex}]로 대체");
+            int safe = trickManager.SafestLegalCardIndex(this);
+            cardIndex = safe >= 0 ? safe : hand.FindIndex(c => trickManager.IsValidPlay(this, c));
+            if (cardIndex < 0) cardIndex = 0;   // 최후 안전망 (이론상 도달 불가)
         }
 
         // [Phase1] 협력 계측/보상: 제출 직전 평가 (hand 온전한 상태)

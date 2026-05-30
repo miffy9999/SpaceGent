@@ -126,21 +126,23 @@ public static class CreateGameUIEditor
             Vector2.zero, new Vector2(-14f, 0f));
 
         // ── 2. 플레이어 슬롯 4개 (2×2, 순수 앵커 비율) ─────────────
+        // 좌측 슬롯(1,2)은 콘텐츠를 오른쪽(안쪽)으로, 우측 슬롯(3,0)은 왼쪽(안쪽)으로
+        // 정렬해 화면 바깥으로 넘치지 않게 한다.
         MakePlayerSlot(R, "PlayerSlot_1", "크루원 1",
             new Vector2(SlotLMin, SlotTopBotY), new Vector2(SlotLMax, SlotTopY),
-            ui, playerIndex: 1, uiAiIndex: 0);
+            ui, playerIndex: 1, uiAiIndex: 0, isRightSide: false);
 
         MakePlayerSlot(R, "PlayerSlot_3", "크루원 3",
             new Vector2(SlotRMin, SlotTopBotY), new Vector2(SlotRMax, SlotTopY),
-            ui, playerIndex: 3, uiAiIndex: 2);
+            ui, playerIndex: 3, uiAiIndex: 2, isRightSide: true);
 
         MakePlayerSlot(R, "PlayerSlot_2", "크루원 2",
             new Vector2(SlotLMin, SlotBotY), new Vector2(SlotLMax, SlotBotTopY),
-            ui, playerIndex: 2, uiAiIndex: 1);
+            ui, playerIndex: 2, uiAiIndex: 1, isRightSide: false);
 
         MakePlayerSlot(R, "PlayerSlot_0", "나 (사령관?)",
             new Vector2(SlotRMin, SlotBotY), new Vector2(SlotRMax, SlotBotTopY),
-            ui, playerIndex: 0, uiAiIndex: -1);
+            ui, playerIndex: 0, uiAiIndex: -1, isRightSide: true);
 
         // ── 3. 중앙 미션 패널 ──────────────────────────────────────────
         var mPanel = AnchorPanel(R, "MissionPanel", BgMid,
@@ -306,9 +308,12 @@ public static class CreateGameUIEditor
     // ── 플레이어 슬롯 (4명 공용, 최상위도 순수 앵커) ────────────────────
     static void MakePlayerSlot(Transform parent, string slotName, string playerLabel,
         Vector2 ancMin, Vector2 ancMax,
-        GameUIManager ui, int playerIndex, int uiAiIndex)
+        GameUIManager ui, int playerIndex, int uiAiIndex, bool isRightSide)
     {
         bool isHuman = (playerIndex == 0);
+
+        // 콘텐츠가 화면 안쪽을 향하도록: 좌측 슬롯=오른쪽 정렬, 우측 슬롯=왼쪽 정렬
+        TextAnchor innerAlign = isRightSide ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight;
 
         // 슬롯 루트: 순수 앵커, offset=zero
         var slot = AnchorPanel(parent, slotName,
@@ -340,34 +345,35 @@ public static class CreateGameUIEditor
         trRT.offsetMax = new Vector2(-4f, 0f);
         var trHG = tokenRowGO.AddComponent<HorizontalLayoutGroup>();
         trHG.spacing              = 4f;
-        trHG.childAlignment       = TextAnchor.MiddleLeft;
+        trHG.childAlignment       = innerAlign;   // 안쪽 정렬 (화면 밖으로 안 넘침)
         trHG.childForceExpandWidth  = false;
         trHG.childForceExpandHeight = false;
         trHG.padding = new RectOffset(4, 4, 2, 2);
 
-        // 통신 토큰 아이콘 + 레이블
+        // 통신 토큰 아이콘 (작게) + 레이블
         MakeTokenIcon(tokenRowGO.transform, "CommTokenIcon", ColComm, out var commImg);
         ui.commTokenIcons[playerIndex] = commImg;
-        MakeLabel(tokenRowGO.transform, "CommLabel", "통신", 11,
-            new Color(ColComm.r, ColComm.g, ColComm.b, 0.85f), 28f);
+        MakeLabel(tokenRowGO.transform, "CommLabel", "통신", 10,
+            new Color(ColComm.r, ColComm.g, ColComm.b, 0.85f), 24f);
 
-        // AI: 카드 수 텍스트
+        // AI: 카드 수 텍스트 (좌측 슬롯=오른쪽, 우측 슬롯=왼쪽 정렬로 안쪽에)
         if (!isHuman && uiAiIndex >= 0)
         {
-            Spacer(tokenRowGO.transform, 6f);
             var countGO = new GameObject("CardCountText",
                 typeof(RectTransform), typeof(TextMeshProUGUI));
             countGO.transform.SetParent(tokenRowGO.transform, false);
             var cTmp = countGO.GetComponent<TextMeshProUGUI>();
-            cTmp.text = "10장"; cTmp.fontSize = 12; cTmp.color = ColTxt;
-            cTmp.alignment = TextAlignmentOptions.MidlineLeft;
+            cTmp.text = "10장"; cTmp.fontSize = 11; cTmp.color = ColTxt;
+            cTmp.alignment = TextAlignmentOptions.Midline;
             if (_font != null) cTmp.font = _font;
-            countGO.AddComponent<LayoutElement>().preferredWidth = 40f;
+            countGO.AddComponent<LayoutElement>().preferredWidth = 34f;
             ui.aiCardCountTexts[uiAiIndex] = cTmp;
+            // 우측 슬롯이면 카드수를 맨 앞(왼쪽)으로 보내 안쪽 배치
+            if (isRightSide) countGO.transform.SetAsFirstSibling();
         }
 
         // ── 과제 목록 영역 (17~67%, 인간은 하단 버튼 여백) ───────────
-        float taskBottom = isHuman ? 0.17f : 0.02f;
+        float taskBottom = isHuman ? 0.13f : 0.02f;
         var taskZoneGO = new GameObject("TaskListZone", typeof(RectTransform));
         taskZoneGO.transform.SetParent(slot.transform, false);
         var tzRT = taskZoneGO.GetComponent<RectTransform>();
@@ -407,39 +413,41 @@ public static class CreateGameUIEditor
         ui.commRevealCardImages[playerIndex]    = revCard.GetComponent<Image>();
         ui.commRevealPositionTexts[playerIndex] = posTxt;
 
-        // ── 인간 토큰 버튼 (0~17%, players[0] 전용) ──────────────────
+        // ── 인간 토큰 버튼 (하단 좌측, 컴팩트, players[0] 전용) ──────
         if (isHuman)
         {
             var btnArea = new GameObject("HumanTokenButtons", typeof(RectTransform));
             btnArea.transform.SetParent(slot.transform, false);
             var baRT = btnArea.GetComponent<RectTransform>();
             baRT.anchorMin = new Vector2(0f, 0f);
-            baRT.anchorMax = new Vector2(1f, 0.17f);
-            baRT.offsetMin = new Vector2(4f, 3f);
-            baRT.offsetMax = new Vector2(-4f, -3f);
+            baRT.anchorMax = new Vector2(1f, 0.12f);
+            baRT.offsetMin = new Vector2(4f, 2f);
+            baRT.offsetMax = new Vector2(-4f, -2f);
             var baHG = btnArea.AddComponent<HorizontalLayoutGroup>();
             baHG.spacing              = 4f;
-            baHG.childAlignment       = TextAnchor.MiddleCenter;
-            baHG.childForceExpandWidth  = true;
+            baHG.childAlignment       = TextAnchor.MiddleLeft;
+            baHG.childForceExpandWidth  = false;   // 작은 고정폭 버튼
             baHG.childForceExpandHeight = true;
             baHG.padding = new RectOffset(2, 2, 1, 1);
 
-            // 통신 토큰 버튼
+            // 통신 토큰 버튼 (작게)
             var commBtnGO = new GameObject("UseCommTokenBtn",
                 typeof(RectTransform), typeof(Image), typeof(Button));
             commBtnGO.transform.SetParent(btnArea.transform, false);
             commBtnGO.GetComponent<Image>().color = ColComm;
-            Txt(commBtnGO.transform, "L", "통신 공개", 11, Color.black,
+            commBtnGO.AddComponent<LayoutElement>().preferredWidth = 70f;
+            Txt(commBtnGO.transform, "L", "통신", 10, Color.black,
                 TextAlignmentOptions.Center,
                 Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             ui.useCommTokenButton = commBtnGO.GetComponent<Button>();
 
-            // 조난신호 버튼 (건너뛰기)
+            // 조난신호 건너뛰기 버튼 (작게)
             var skipBtnGO = new GameObject("SkipBtn",
                 typeof(RectTransform), typeof(Image), typeof(Button));
             skipBtnGO.transform.SetParent(btnArea.transform, false);
             skipBtnGO.GetComponent<Image>().color = new Color(0.5f, 0.5f, 0.5f, 0.8f);
-            Txt(skipBtnGO.transform, "L", "건너뛰기", 10, Color.white,
+            skipBtnGO.AddComponent<LayoutElement>().preferredWidth = 60f;
+            Txt(skipBtnGO.transform, "L", "건너뛰기", 9, Color.white,
                 TextAlignmentOptions.Center,
                 Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             ui.skipDistressSignalButton = skipBtnGO.GetComponent<Button>();
@@ -478,8 +486,8 @@ public static class CreateGameUIEditor
         img = go.GetComponent<Image>();
         img.color = color;
         var le = go.AddComponent<LayoutElement>();
-        le.preferredWidth  = 22f;
-        le.preferredHeight = 22f;
+        le.preferredWidth  = 16f;
+        le.preferredHeight = 16f;
     }
 
     static void MakeLabel(Transform parent, string name, string text,
@@ -492,13 +500,6 @@ public static class CreateGameUIEditor
         tmp.alignment = TextAlignmentOptions.MidlineLeft;
         if (_font != null) tmp.font = _font;
         go.AddComponent<LayoutElement>().preferredWidth = width;
-    }
-
-    static void Spacer(Transform parent, float width)
-    {
-        var go = new GameObject("_sep", typeof(RectTransform), typeof(LayoutElement));
-        go.transform.SetParent(parent, false);
-        go.GetComponent<LayoutElement>().preferredWidth = width;
     }
 
     static TMP_Text Txt(Transform parent, string name, string text,
