@@ -345,7 +345,7 @@ public class CrewAgent : Agent
     //   40 (손패) + 40 (테이블 / 선택 페이즈엔 task 풀 슬롯) + 5 (리드)
     //   + 162 (팀 태스크 4명분, 슬롯 +2=순서토큰 전체) + 4 (손패 수) + 4 (트릭 승리 수)
     //   + 2 (플래그: [0]선택페이즈 / [1]선택중=패스가능·플레이중=내task타깃보유)
-    //   + 24 (통신: viewer 기준 4명 × [사용,공개suit/4,공개value/9,高,唯,低])
+    //   + 24 (통신: viewer 기준 4명 × [사용,공개suit/4,공개value/9,최고,유일,최저])
     //   + 16 (특수규칙 예약 — Phase A엔 0, 커리큘럼에서 채움)
     //
     //   선택(드래프트) 페이즈에는 비어있는 '테이블 40칸'을 풀 슬롯 인코딩으로 재사용:
@@ -437,7 +437,7 @@ public class CrewAgent : Agent
         else
             sensor.AddObservation(mm != null && mm.HoldsOwnTaskTarget(this) ? 1f : 0f);
 
-        // 8. 통신 (24) — viewer 기준 시계방향 4명 × [사용, 공개suit/4, 공개value/9, 高, 唯, 低]
+        // 8. 통신 (24) — viewer 기준 시계방향 4명 × [사용, 공개suit/4, 공개value/9, 최고, 유일, 최저]
         var cm = GameManager.Instance.communicationManager;
         for (int i = 0; i < players.Count; i++)
         {

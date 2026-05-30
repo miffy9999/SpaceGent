@@ -100,7 +100,7 @@
 
 - **관측 벡터 257 → 297** (`CrewAgent.ObservationSize`). 직렬화 `VectorObservationSize`도 297로 통일:
   `Player Agent.prefab`, `Table Environment.prefab`(오버라이드 4), `SampleScene.unity`(4). 액션 `[10,2,4]` 불변.
-  - **+24 통신**: viewer 기준 4명 × [사용, 공개suit/4, 공개value/9, 高/唯/低]. 실제 공개 카드 정보 반영 → **통신이 협력 채널로 작동**(이전 dead action 해소).
+  - **+24 통신**: viewer 기준 4명 × [사용, 공개suit/4, 공개value/9, 최고/유일/최저]. 실제 공개 카드 정보 반영 → **통신이 협력 채널로 작동**(이전 dead action 해소).
   - **+16 특수규칙(예약)**: mission-level. Phase A엔 0. `MissionManager.GetSpecialRuleObs()` 스텁(레이아웃 문서화) — Phase B/C에서 채움.
 - **순서 토큰 전체 관측**: task 슬롯 `+2`를 `orderIndex(N1~5만)` → `(int)orderToken/10`(None~Arrow4 전부)로 변경. Ω·화살표도 관측 가능.
 - **순서 토큰 커리큘럼 게이트**: env `enable_order_tokens`(기본 0). 1이면 `AssignSequentialOrderTokens()`가 풀 앞쪽부터 N1..N5 부여.
