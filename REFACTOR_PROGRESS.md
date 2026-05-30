@@ -26,14 +26,21 @@
 - task 개수: env `num_tasks`(기본 1), `MaxPoolSize=10` 클램프. 커리큘럼으로 1→증가 예정.
 - 단일 담당자 개념(`phase1Assignee`)은 `tasks[0]` 소유자로 대표(베이스라인/관측 호환).
 
+## 완료 (이어서)
+
+- **Unity 컴파일 확인**: Phase 1a·1b 모두 통과 (사용자 확인).
+- **씬 설정**: 4명 `BehaviorType=Default` (MA-POCA) — 사용자 설정 완료.
+- **config/trainer_config.yaml**: `trainer_type: poca`로 재작성, 커리큘럼을 `num_tasks` 1→2→3→4로 교체.
+- **env/stat 정리**: `num_tasks` 도입, 구 파라미터(`win_target`/`task_type`/`fixed_assignee`) 코드에서 제거됨.
+  stat 태그는 `coop/success_by_{assignee|helper}`, `hfsm/{throw|win|playtarget}_rate`로 정리됨.
+- **README**: task 단일 타입·드래프트 학습·MA-POCA·관찰/액션/커리큘럼 섹션 갱신.
+
 ## 다음 할 일 (TODO)
 
-1. **[게이트] Unity 컴파일 확인** — 이번 Phase 1b 코드(CrewAgent, MissionManager).
-2. **씬 설정**: 4명 모두 `BehaviorType=Default`(MA-POCA), `scripted_helpers=0` 확인. `teamGroup`은 GameManager가 자동 등록(helperHeuristicOnly가 아니면).
-3. **config/trainer_config.yaml**: `trainer_type: poca`로 재작성 + 커리큘럼을 `num_tasks` 1→증가로 교체(현재 difficulty 3/5/7/9 기반).
-4. **env/stat 정리**: `num_tasks` 도입, 구 파라미터(`win_target` 등) 정리. stat 태그는 이미 타깃 보유자별로 정리됨.
-5. **README/CHANGELOG** 갱신.
-6. **Phase 2**: 미션 특수 규칙(데드존·통신차단·"9 못 이김"·로켓 순서 등)을 관찰 벡터로 인코딩.
+1. **학습 실행 검증**: `mlagents-learn config/trainer_config.yaml --run-id=spacegent_v1` (Unity Play 후).
+   Stage1(num_tasks=1) 그룹 평균 보상이 오르는지, 드래프트에서 take/pass 분포가 의미있게 갈리는지 확인.
+2. **(선택) 선택 페이즈 watchdog**: 트레이너 없는 Play 모드에서 선택 단계가 정지하지 않도록(현재 미구현).
+3. **Phase 2**: 미션 특수 규칙(데드존·통신차단·"9 못 이김"·로켓 순서 등)을 관찰 벡터로 인코딩.
 
 ## 알려진 주의점 / 리스크
 

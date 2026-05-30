@@ -1,6 +1,9 @@
 behaviors:
   CrewAgent:
-    trainer_type: ppo
+    # MA-POCA: 4명을 한 팀으로 묶어 group reward + 중앙집중 critic으로 협력 학습.
+    #   GameManager가 helperHeuristicOnly가 아니면 SimpleMultiAgentGroup에 4명 등록.
+    #   (씬: 4명 모두 BehaviorType=Default)
+    trainer_type: poca
     hyperparameters:
       batch_size: 256
       buffer_size: 4096
@@ -25,47 +28,48 @@ behaviors:
     keep_checkpoints: 5
 
 # ──────────────────────────────────────────────
-# 커리큘럼 학습
-# MissionManager.InitMission()에서
-# Academy.EnvironmentParameters.GetWithDefault("difficulty", 9)로 읽는다.
+# 커리큘럼 학습 — task 개수를 1개부터 점차 늘린다.
+#   MissionManager.StartTaskSelectionPhase()에서
+#   Academy.EnvironmentParameters.GetWithDefault("num_tasks", 1)로 읽는다.
 #
-# 단계별 최대 미션 난이도:
-#   1단계: 3  (111 계열 — 태스크 합계 3 이하)
-#   2단계: 5  (123 계열)
-#   3단계: 7  (234 계열)
-#   4단계: 9  (333/344/444 계열, 전체 미션)
+#   각 task = WinSpecificCard("지정 색깔+숫자 카드가 든 트릭을 소유자가 이긴다").
+#   task는 함장부터 시계방향 드래프트로 배정(가져가기/패스, 정책이 학습).
 #
-# 전환 기준: reward_threshold (에피소드 평균 보상) 달성 시 다음 단계로
+#   보상(그룹): task 완수 +1 / 실패 -1 (실패 시 즉시 미션 종료).
+#   → 에피소드 그룹 리턴 ≈ (완수 task 수) - (실패 시 1). num_tasks개 모두 완수 시 +num_tasks.
+#
+#   진급 기준(threshold)은 그룹 평균 보상. num_tasks=1에서 mean=2*성공률-1 이므로
+#   0.6 ≈ 성공률 80%. 단계가 올라갈수록 천장이 커지되 난이도도 오르므로 값은 튜닝 대상.
 # ──────────────────────────────────────────────
 environment_parameters:
-  difficulty:
+  num_tasks:
     curriculum:
-      - name: Stage1_Easy
+      - name: Stage1_1task
         completion_criteria:
           measure: reward
           behavior: CrewAgent
           signal_smoothing: true
           min_lesson_length: 100
-          threshold: 1.5        # 평균 보상 1.5 이상이면 다음 단계
-        value: 3
+          threshold: 0.6
+        value: 1
 
-      - name: Stage2_Normal
+      - name: Stage2_2tasks
+        completion_criteria:
+          measure: reward
+          behavior: CrewAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 0.8
+        value: 2
+
+      - name: Stage3_3tasks
         completion_criteria:
           measure: reward
           behavior: CrewAgent
           signal_smoothing: true
           min_lesson_length: 100
           threshold: 1.0
-        value: 5
+        value: 3
 
-      - name: Stage3_Hard
-        completion_criteria:
-          measure: reward
-          behavior: CrewAgent
-          signal_smoothing: true
-          min_lesson_length: 100
-          threshold: 0.5
-        value: 7
-
-      - name: Stage4_Full
-        value: 9
+      - name: Stage4_4tasks
+        value: 4
