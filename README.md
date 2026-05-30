@@ -30,13 +30,19 @@
 - **스페이스 크루 룰 충실 구현**
   - Follow-suit, 로켓(트럼프) 우선, 트릭 승자 판별
   - 사령관(로켓 4번 소지자)부터 시계방향으로 태스크 선택
-  - 순서 토큰: 번호가 있는 태스크는 낮은 번호 순서대로 달성
+  - 순서 토큰: 번호(1·2·3·Ω)·화살표 토큰 순서대로 달성, 위반 시 즉시 미션 실패
   - **무선통신 토큰**: 미션당 1회, 트릭 사이에만 사용. 자기 카드 1장을 공개하고 최고/유일/최저 위치 표시 (로켓 불가)
   - **조난신호**: 첫 트릭 전, 로켓을 제외한 카드 1장을 인접 플레이어에게 전달
-- **단일 태스크 타입(WinSpecificCard)**: "지정 색깔+숫자 카드가 든 트릭을 이긴다" — 색상 4종 × 1~9 = 36종
+- **미션 1~50 전체 정의**: `MissionDatabase.BuildAllMissions()`가 태스크 수·순서 토큰·특수 규칙을 코드로 정의
+  - **전역 미션 규칙**: 9 트릭 금지, 로켓 오름차순, 2트릭 차 금지, 로켓당 1트릭, 사령관 첫·마지막 등 (`GlobalMissionRule`)
+  - **통신 특수 규칙**: 데드존(위치 비공개), 통신 차단(⚡N 트릭 전 금지), 특정인 통신 불가 (`MissionTaskRule`)
+- **단일 태스크 타입(WinSpecificCard)**: "지정 색깔+숫자 카드가 든 트릭을 이긴다" — 색상 4종 × 1~9 = 36종. 태스크는 **텍스트로만 표시**(스프라이트 불필요)
 - **task 드래프트 정책 학습**: 사령관부터 시계방향으로 가져가기/패스(`T<R`일 때만 패스)를 학습
-- **ML-Agents (MA-POCA)**: 4-에이전트 협력 — 트릭테이킹 + task 선택 두 정책을 함께 학습. 관찰 257개, 이산 행동 3 브랜치
+- **ML-Agents (MA-POCA)**: 4-에이전트 협력 — 트릭테이킹 + task 선택 두 정책을 함께 학습. 관찰 313개, 이산 행동 3 브랜치
   - 인간 플레이어는 ML-Agents 파이프라인을 완전히 우회 (`HumanDirectPlay`)
+- **플레이 모드 토글** (`GameManager.playMode`)
+  - **Simulation**: 전원 AI 자동 진행 — 인간 입력 없이 빠르게(학습·평가·시뮬). 미션은 `num_tasks` 커리큘럼
+  - **HumanVsAI**: player[0]이 인간. 미션 DB의 1→50을 순서대로 진행(성공 시 다음 미션)
 - **커리큘럼 학습**: task 개수 1개 → 점차 증가 (`num_tasks`)
 - **입력 시스템**: New Input System (`Keyboard.current`) + old Input (Both 모드)
 - **2D 손패 UI**: 카드 클릭 및 키보드 1~0 선택 지원
@@ -72,10 +78,10 @@ SpaceGent/
 │       │   ├── GamePhase.cs           # Setup / TaskSelection / DistressSignal / Playing / Result
 │       │   ├── GameUIManager.cs       # HUD + 태스크 선택 패널 + 토큰 버튼
 │       │   ├── HandCardUI.cs          # 손패 카드 버튼 (클릭 → SelectCard)
-│       │   ├── Mission.cs             # 미션 데이터 (id, taskCounts, 난이도)
-│       │   ├── MissionDatabase.cs     # Mission ScriptableObject 컬렉션
-│       │   ├── MissionManager.cs      # 태스크 선택 + 트릭 판정 + 보상
-│       │   ├── TaskCard.cs            # WinSpecificCard 태스크(targetCard) + 순서 토큰
+│       │   ├── Mission.cs             # 미션 데이터 (번호, 태스크 수, 순서토큰, 전역/통신 특수규칙)
+│       │   ├── MissionDatabase.cs     # 미션 1~50 코드 정의 + ScriptableObject 컬렉션
+│       │   ├── MissionManager.cs      # 태스크 선택 + 트릭 판정 + 전역규칙 + 보상 + 미션 진행
+│       │   ├── TaskCard.cs            # WinSpecificCard 태스크(targetCard) + 순서 토큰(OrderToken)
 │       │   ├── TaskSpriteMapping.cs   # 태스크 → Sprite 매핑 ScriptableObject
 │       │   └── TrickManager.cs        # 게임 흐름 제어 + 트릭 로직 + Watchdog
 │       └── InputSystem_Actions.cs     # New Input System 자동 생성 파일 (수정 금지)
@@ -99,14 +105,14 @@ SpaceGent/
 스페이스 크루의 태스크 카드는 한 종류뿐이다: **"지정된 색깔+숫자 카드(targetCard)가 포함된 트릭을 자신이 이긴다."**
 대상 카드는 색상 4종 × 1~9 = **36종** (로켓은 태스크 카드가 아님). 대상 카드가 나온 트릭의 승자가 소유자면 완수, 아니면 즉시 실패.
 
-> 미션별 특수 승리 조건(예: "9는 트릭 못 이김", "로켓 오름차순")은 태스크 카드가 아니라 **미션 단위 특수 규칙**으로, Phase 2에서 관찰 벡터로 표현 예정.
+> 미션별 특수 승리 조건(예: "9는 트릭 못 이김", "로켓 오름차순")은 태스크 카드가 아니라 **미션 단위 특수 규칙**(`GlobalMissionRule`)으로 구현되어 트릭마다/핸드 종료 시 판정된다. 위반 시 즉시 미션 실패.
 
 ### 태스크 드래프트(선택) 단계
-1. `num_tasks`개의 WinSpecificCard 태스크 풀이 생성된다
+1. 미션이 정한 수만큼 WinSpecificCard 태스크 풀이 생성된다 (학습: `num_tasks` 커리큘럼 / 인간 플레이: 미션 DB 정의)
 2. **사령관(로켓4 소지자)부터** 시계방향으로 돌며, 각자 **가져가기 또는 패스**
    - 패스 규칙: 남은 task `T` < 이번 라운드 잔여 인원 `R`(=`N - cursor%N`)일 때만 패스 가능. `T >= R`이면 강제 선택 → 모든 task는 반드시 배정됨
-3. AI는 **학습된 정책**으로 선택(ML), 인간은 UI 버튼/키
-4. 일부 태스크에는 **순서 토큰(1·2·3…·Ω·화살표)** — 지정된 순서대로 달성 (현재 학습 풀은 순서 토큰 미부여)
+3. **Simulation/학습**: AI가 ML 정책으로 선택(`RequestDecision`). **HumanVsAI**: AI는 결정론적 자동 선택(브레인 없이도 진행), 인간은 UI 버튼/키
+4. 일부 태스크에는 **순서 토큰(1·2·3·Ω·화살표)** — 미션 정의에 따라 부여, 지정 순서대로 달성
 5. 드래프트 완료 후 (조난신호 단계를 거쳐) 트릭 게임 시작
 
 ### 무선통신 · 조난신호
@@ -229,9 +235,11 @@ tensorboard --logdir results/
 ### Inspector 필수 연결 항목
 
 **GameManager**
-- `players` — CrewAgent 4개 (index 0 = 인간)
+- `playMode` — **Simulation**(전원 AI 자동, 학습/시뮬) 또는 **HumanVsAI**(player[0] 인간)
+- `players` — CrewAgent 4개 (index 0 = 인간, Simulation 시 전원 AI)
 - `centerBoard` — 중앙 테이블 Transform
 - `deckManager`, `trickManager`, `missionManager`, `communicationManager`, `uiManager`
+- `database`(MissionManager) — 미션 1~50 DB. Inspector의 "50개 미션 코드 정의로 재생성" 버튼으로 생성
 
 **GameUIManager**
 - `taskSelectionPanel` — 태스크 선택 오버레이 패널 루트 **(필수)**
