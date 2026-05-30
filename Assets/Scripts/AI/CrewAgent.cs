@@ -324,19 +324,6 @@ public class CrewAgent : Agent
             cardObj.transform.localPosition = new Vector3(
                 Random.Range(-1.5f, 1.5f),
                 Random.Range(-1.5f, 1.5f), 0f);
-
-            // 플레이어 이름 레이블 (카드 아래)
-            var labelGO = new GameObject("PlayerLabel");
-            labelGO.transform.SetParent(cardObj.transform, false);
-            labelGO.transform.localPosition = new Vector3(0f, -0.65f, -0.05f);
-            var tm = labelGO.AddComponent<TextMesh>();
-            tm.text          = gameObject.name;
-            tm.fontSize      = 24;
-            tm.characterSize = 0.06f;
-            tm.color         = Color.white;
-            tm.anchor        = TextAnchor.UpperCenter;
-            tm.alignment     = TextAlignment.Center;
-            tm.fontStyle     = FontStyle.Bold;
         }
 
         Debug.Log($"[{gameObject.name}] {playedCard} 제출");
