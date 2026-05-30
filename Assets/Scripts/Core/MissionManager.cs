@@ -731,11 +731,18 @@ public class MissionManager : MonoBehaviour
     // ---------------------------------------------------------------
     public const int TaskObservationSize = 162;
 
-    // 특수 규칙 관찰 (16, 예약) — mission-level. Phase A엔 전부 0, Phase B/C에서 채움.
-    //   계획 레이아웃: [0]데드존 [1]통신차단 활성 [2]통신가능트릭(/10)
-    //   [3]사령관 결정 [4]사령관 분배 [5]"9 트릭불가" [6]"로켓 승리불가"
-    //   [7]"로켓 오름차순" [8]"첫·마지막만" [9]"2트릭차 금지" [10..15]예비
-    public const int SpecialRuleObsSize = 16;
+    // 특수 규칙 관찰 (32, 예약) — mission-level. Phase A엔 전부 0, Phase B/C에서 채움.
+    //   "미션마다 one-hot"이 아니라 메커니즘 카테고리 + 파라미터로 인코딩(미션 md 19종 수용).
+    //   계획 레이아웃:
+    //   통신:   [0]데드존 [1]통신차단 재개트릭(/10) [2]특정인 통신불가
+    //   드래프트:[3]사령관 결정 [4]사령관 분배 [5]순서토큰 이동/교환 허용
+    //   승리조건:[6]9 트릭불가 [7]로켓 승리불가 [8]2트릭차 금지 [9]로켓 오름차순
+    //           [10]사령관 첫·마지막 [11]첫·마지막만(로켓없이) [12]특정값 승리필요 [13]그 값(/9)
+    //           [14]로켓당 1트릭 [15]특정"1"카드 트릭승리 [16]특정 색 전담 [17]그 색(/4)
+    //           [18]첫N트릭 전담 [19]N(/10) [20]마지막트릭 전담
+    //   흐름:   [21]첫 트릭 후 카드 전달
+    //   [22..31] 예비
+    public const int SpecialRuleObsSize = 32;
     public float[] GetSpecialRuleObs() => new float[SpecialRuleObsSize];
 
     public float[] GetTaskObservationFor(CrewAgent viewer)

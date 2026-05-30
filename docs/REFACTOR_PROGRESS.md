@@ -98,10 +98,11 @@
 > 커리큘럼 조건들을 `--resume`로 **이어받아 학습(transfer)** 하려면 관측/액션 공간이 단계 간 동일해야 하므로,
 > **관측을 처음부터 "최종형"으로 확장**하고 조건은 env 파라미터로 켜고 끈다.
 
-- **관측 벡터 257 → 297** (`CrewAgent.ObservationSize`). 직렬화 `VectorObservationSize`도 297로 통일:
+- **관측 벡터 257 → 297 → 313** (`CrewAgent.ObservationSize`). 직렬화 `VectorObservationSize`도 동일하게:
   `Player Agent.prefab`, `Table Environment.prefab`(오버라이드 4), `SampleScene.unity`(4). 액션 `[10,2,4]` 불변.
   - **+24 통신**: viewer 기준 4명 × [사용, 공개suit/4, 공개value/9, 최고/유일/최저]. 실제 공개 카드 정보 반영 → **통신이 협력 채널로 작동**(이전 dead action 해소).
-  - **+16 특수규칙(예약)**: mission-level. Phase A엔 0. `MissionManager.GetSpecialRuleObs()` 스텁(레이아웃 문서화) — Phase B/C에서 채움.
+  - **+32 특수규칙(예약)**: mission-level. Phase A엔 0. `MissionManager.GetSpecialRuleObs()` 스텁(32칸, 카테고리+파라미터 레이아웃 문서화).
+    미션 md 특수규칙 19종을 one-hot이 아니라 메커니즘+파라미터로 수용하기 위해 16→32로 증설(전이 깨짐 방지 위해 초반에 헤드룸 확보). Phase B/C에서 채움.
 - **순서 토큰 전체 관측**: task 슬롯 `+2`를 `orderIndex(N1~5만)` → `(int)orderToken/10`(None~Arrow4 전부)로 변경. Ω·화살표도 관측 가능.
 - **순서 토큰 커리큘럼 게이트**: env `enable_order_tokens`(기본 0). 1이면 `AssignSequentialOrderTokens()`가 풀 앞쪽부터 N1..N5 부여.
   enforce 로직(`IsOrderTokenValid`)은 이미 존재 → 켜기만 하면 학습에 적용. (num_tasks≥2에서 의미)
