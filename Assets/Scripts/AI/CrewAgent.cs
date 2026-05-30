@@ -134,6 +134,11 @@ public class CrewAgent : Agent
             if (idx >= 0) d[0] = idx;
         }
         // d[1], d[2] (통신/예비): Clear로 0 (사용 안 함)
+
+        // 선택(드래프트) 페이즈: 풀 슬롯 0 가져가기 (베이스라인 — 학습 경로는 정책이 담당)
+        if (trickManager != null && trickManager.currentPhase == GamePhase.TaskSelection
+            && d.Length > 0)
+            d[0] = 0;
     }
 
     // ── MCTS 진입점 (담당자만 호출) ────────────────────────────────
@@ -179,6 +184,21 @@ public class CrewAgent : Agent
     // ---------------------------------------------------------------
     public override void WriteDiscreteActionMask(IDiscreteActionMask actionMask)
     {
+        // === 선택(드래프트) 페이즈 마스킹 ===
+        //   Branch 0 = 풀 슬롯(가져갈 task), Branch 1 = 0:가져가기 / 1:패스
+        if (trickManager != null && trickManager.currentPhase == GamePhase.TaskSelection)
+        {
+            var msel = MissionManager.Instance;
+            int pool = msel != null ? msel.PoolCount : 0;
+            for (int i = 0; i < 10; i++)
+                actionMask.SetActionEnabled(0, i, pool == 0 ? i == 0 : i < pool);
+            actionMask.SetActionEnabled(1, 1, msel != null && msel.CanCurrentPickerPass());
+            actionMask.SetActionEnabled(2, 1, false);
+            actionMask.SetActionEnabled(2, 2, false);
+            actionMask.SetActionEnabled(2, 3, false);
+            return;
+        }
+
         // 안전망: 손패 0장이면 마스킹 스킵.
         //   에피소드 종료 직후 재시작 대기 중 MLAgents SendInfo 사이클이 한 번 더 돌면서
         //   이 함수를 호출할 수 있는데, 모든 액션 마스킹은 "All actions masked" 예외 유발.
@@ -227,10 +247,26 @@ public class CrewAgent : Agent
     // ---------------------------------------------------------------
     public override void OnActionReceived(ActionBuffers actions)
     {
-        if (!isMyTurn || isHumanPlayer) return;
+        if (isHumanPlayer) return;
+        var d = actions.DiscreteActions;
+
+        // === 선택(드래프트) 페이즈 ===
+        if (trickManager != null && trickManager.currentPhase == GamePhase.TaskSelection)
+        {
+            var msel = MissionManager.Instance;
+            if (msel != null && msel.GetCurrentPickingPlayer() == this)
+            {
+                int poolSlot  = d.Length > 0 ? d[0] : 0;
+                bool wantPass = d.Length > 1 && d[1] == 1;
+                msel.AgentSelectTask(this, poolSlot, wantPass);
+            }
+            return;
+        }
+
+        // === 플레이(트릭) 페이즈 ===
+        if (!isMyTurn) return;
         if (hand.Count == 0) { isMyTurn = false; return; }
 
-        var d = actions.DiscreteActions;
         int cardIndex  = d[0];
         int commAction = d.Length > 1 ? d[1] : 0;
 
@@ -305,10 +341,14 @@ public class CrewAgent : Agent
     }
 
     // ---------------------------------------------------------------
-    // 관찰 (Observation) — 총 257개
-    //   40 (손패) + 40 (테이블) + 5 (리드) + 162 (팀 태스크 4명분)
-    //   + 4 (손패 수) + 4 (현재 트릭 승리 수)
-    //   + 2 (Phase1 역할: 내가 담당자인가 / 담당자 잔여 트릭 수)
+    // 관찰 (Observation) — 총 257개 (벡터 크기 불변)
+    //   40 (손패) + 40 (테이블 / 선택 페이즈엔 task 풀 슬롯) + 5 (리드)
+    //   + 162 (팀 태스크 4명분) + 4 (손패 수) + 4 (현재 트릭 승리 수)
+    //   + 2 (플래그: [0]선택페이즈인가 / [1]선택중=패스가능·플레이중=내task타깃보유)
+    //
+    //   선택(드래프트) 페이즈에는 비어있는 '테이블 40칸'을 풀 슬롯 인코딩으로 재사용:
+    //     슬롯 j(0..9): [targetSuit/4, targetValue/9, 내가보유, 점유] (4칸 × 10)
+    //   → 액션 Branch[0]=j 가 이 슬롯 j에 대응. 벡터/액션 공간 변경 없음(씬 편집 불필요).
     // ---------------------------------------------------------------
     public const int ObservationSize = 257;
 
@@ -327,10 +367,31 @@ public class CrewAgent : Agent
         foreach (Card c in hand) handObs[GetCardIndex(c)] = 1f;
         foreach (float f in handObs) sensor.AddObservation(f);
 
-        // 2. 바닥 카드 (40)
+        bool selecting = tm != null && tm.currentPhase == GamePhase.TaskSelection;
+        var mmObs = MissionManager.Instance;
+
+        // 2. 바닥 카드 (40) — 선택 페이즈엔 동일 40칸에 task 풀 슬롯 인코딩
         float[] tableObs = new float[40];
-        if (tm != null)
+        if (selecting && mmObs != null)
+        {
+            var pool = mmObs.taskPool;
+            for (int j = 0; j < 10 && j < pool.Count; j++)
+            {
+                Card c = pool[j].targetCard;
+                int b = j * 4;
+                if (c != null)
+                {
+                    tableObs[b + 0] = (int)c.suit / 4f;
+                    tableObs[b + 1] = c.value / 9f;
+                    tableObs[b + 2] = hand.Contains(c) ? 1f : 0f;
+                }
+                tableObs[b + 3] = 1f;   // 슬롯 점유
+            }
+        }
+        else if (tm != null)
+        {
             foreach (Card c in tm.cardsOnTable) tableObs[GetCardIndex(c)] = 1f;
+        }
         foreach (float f in tableObs) sensor.AddObservation(f);
 
         // 3. 선 색상 (5)
@@ -365,11 +426,14 @@ public class CrewAgent : Agent
             sensor.AddObservation(wins / 10f);
         }
 
-        // 7. 역할 명시 (2) — Phase1에서 정책이 역할을 쉽게 조건화하도록
-        //   [0] 내가 담당자인가  [1] 내가 타깃 카드를 보유 중인가(담당자/도우미 협력 판단용)
-        sensor.AddObservation((mm != null && mm.IsPhase1Assignee(this)) ? 1f : 0f);
-        Card tgt = mm != null ? mm.CurrentTargetCard() : null;
-        sensor.AddObservation(tgt != null && hand.Contains(tgt) ? 1f : 0f);
+        // 7. 페이즈/역할 플래그 (2)
+        //   [0] 선택 페이즈인가 (블록2 해석: 1=풀 슬롯 / 0=바닥 카드)
+        //   [1] 선택 중이면 '패스 가능', 플레이 중이면 '내 task 타깃 보유'
+        sensor.AddObservation(selecting ? 1f : 0f);
+        if (selecting)
+            sensor.AddObservation(mm != null && mm.CanCurrentPickerPass() ? 1f : 0f);
+        else
+            sensor.AddObservation(mm != null && mm.HoldsOwnTaskTarget(this) ? 1f : 0f);
     }
 
     // ---------------------------------------------------------------

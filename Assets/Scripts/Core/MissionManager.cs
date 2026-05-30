@@ -70,6 +70,9 @@ public class MissionManager : MonoBehaviour
     private bool  epTargetHeldByAssignee; // 이번 에피소드 타깃 카드를 담당자가 보유했는가(계측용)
     private int   epHelperPlays, epVoluntaryContests;   // 에피소드 통계
 
+    // 드래프트 풀 상한 = 선택 액션(Branch[0]) 크기. task 개수는 이 값 이하로 제한.
+    public const int MaxPoolSize = 10;
+
     // [v3 카드 메모리] 이번 핸드에서 이미 플레이된 카드 (트릭 종료 시 누적).
     //   "guaranteed winner" 판정에 사용 — 내 카드보다 강한 카드가 모두 소진됐는지 확인.
     //   핸드 시작 시 Clear, OnTrickResolved에서 trickCards 추가.
@@ -106,93 +109,55 @@ public class MissionManager : MonoBehaviour
         // [v3 카드 메모리] 새 핸드 시작 — 이전 핸드의 played cards 비움
         playedCardsInHand.Clear();
 
-        // [Phase1] 선택 단계를 건너뛰고 WinSpecificCard 태스크 1개를 담당자에게 배정 후 즉시 시작
-        if (Phase != TrainingMode.Normal)
+        var ep = Academy.Instance.EnvironmentParameters;
+        scriptedHelpers = ep.GetWithDefault("scripted_helpers", 0f) > 0.5f;
+        epHelperPlays = epVoluntaryContests = 0;
+        RuleBasedHelper.ResetEpisodeStats();
+
+        // 태스크 개수 결정
+        int taskCount;
+        if (Phase == TrainingMode.Normal && database != null)
         {
-            currentMaxDifficulty = 0;
-            var ep = Academy.Instance.EnvironmentParameters;
-            scriptedHelpers    = ep.GetWithDefault("scripted_helpers", 0f) > 0.5f;
-            bool fixedAssignee = ep.GetWithDefault("fixed_assignee", 0f) > 0.5f;
-            epHelperPlays = epVoluntaryContests = 0;
-            // fixed_assignee=1이면 player[0] 고정(HeuristicOnly 도우미와 짝) — 단일 에이전트 격리
-            phase1Assignee = fixedAssignee ? players[0] : players[Random.Range(0, players.Count)];
-
-            // WinSpecificCard: 색깔 카드 36장(로켓 제외) 중 1장을 타깃으로 추첨.
-            //   36장은 전부 분배되므로 타깃 카드는 반드시 누군가의 손에 있다.
-            Card target = new Card((Card.Suit)Random.Range(0, 4), Random.Range(1, 10));
-            var t = TaskCard.SpecificCard(target);
-            t.assignedTo = phase1Assignee;
-            tasks.Add(t);
-            epTargetHeldByAssignee = phase1Assignee.hand.Contains(target);
-
-            RuleBasedHelper.ResetEpisodeStats();
-            LogTaskSummary();
-            GameManager.Instance.uiManager?.HideTaskSelection();
-            GameManager.Instance.trickManager.StartPlaying();
-            return;
-        }
-
-        // 미션 선택 (커리큘럼)
-        currentMaxDifficulty = Mathf.RoundToInt(
-            Academy.Instance.EnvironmentParameters.GetWithDefault("difficulty", 9f));
-        currentMission = database != null ? database.GetByMaxDifficulty(currentMaxDifficulty) : null;
-
-        // 태스크 풀 생성 (미배정)
-        if (currentMission != null)
-        {
-            Debug.Log($"[Mission] 난이도 상한={currentMaxDifficulty} → {currentMission.id} 선택");
-            GenerateTaskPool(currentMission, captainIndex);
+            currentMaxDifficulty = Mathf.RoundToInt(ep.GetWithDefault("difficulty", 9f));
+            currentMission = database.GetByMaxDifficulty(currentMaxDifficulty);
+            taskCount = currentMission != null ? currentMission.TotalTaskCount : players.Count;
         }
         else
         {
-            GenerateFallbackPool(captainIndex);
+            // 학습(커리큘럼): task 개수를 1개부터 점차 늘린다 (env: num_tasks)
+            taskCount = Mathf.RoundToInt(ep.GetWithDefault("num_tasks", 1f));
+            currentMission = null;
+            currentMaxDifficulty = taskCount;
         }
+        taskCount = Mathf.Clamp(taskCount, 1, MaxPoolSize);
 
-        // 실제 스페이스 크루 규칙: 함장부터 시계방향으로 모든 플레이어가 선택 (함장 포함)
+        // WinSpecificCard 태스크 풀 생성 (미배정) — 드래프트로 배정
+        GenerateTaskPool(taskCount, captainIndex);
+
+        // 선택 순서: 함장(로켓4 소지자)부터 시계방향
         selectionOrder.Clear();
         for (int i = 0; i < players.Count; i++)
             selectionOrder.Add((captainIndex + i) % players.Count);
         selectionCursor = 0;
 
-        Debug.Log($"[Mission] 태스크 풀 {taskPool.Count}개 생성, 선택 시작");
-
-        // UI 표시 후 AI 자동 선택 진행
+        Debug.Log($"[Mission] 태스크 풀 {taskPool.Count}개 생성, 드래프트 시작");
         GameManager.Instance.uiManager?.ShowTaskSelection();
-        AdvanceUntilHumanOrDone();
+        GiveSelectionTurn();
     }
 
     // ---------------------------------------------------------------
     // 태스크 풀 생성 (미배정 상태)
     // ---------------------------------------------------------------
-    private void GenerateTaskPool(Mission mission, int captainIndex)
+    private void GenerateTaskPool(int count, int captainIndex)
     {
         var players = GameManager.Instance.players;
         HashSet<Card> used = new HashSet<Card>();
 
-        // 실제 스페이스 크루: 함장도 태스크를 가질 수 있으므로 모든 플레이어 손패 참고
-        int total = mission.TotalTaskCount;
-        for (int i = 0; i < total; i++)
+        for (int i = 0; i < count; i++)
         {
             int pIdx = (captainIndex + (i % players.Count)) % players.Count;
             TaskCard task = CreateUnassignedTask(players[pIdx], used);
             if (task == null) break;
-            taskPool.Add(task);
-            if (task.targetCard != null)
-                used.Add(task.targetCard);
-        }
-    }
-
-    private void GenerateFallbackPool(int captainIndex)
-    {
-        var players = GameManager.Instance.players;
-        HashSet<Card> used = new HashSet<Card>();
-
-        // 모든 플레이어가 최소 1개씩 선택할 수 있도록 players.Count개 생성
-        for (int i = 0; i < players.Count; i++)
-        {
-            int pIdx = (captainIndex + i) % players.Count;
-            TaskCard task = CreateUnassignedTask(players[pIdx], used);
-            if (task == null) continue;
             taskPool.Add(task);
             if (task.targetCard != null)
                 used.Add(task.targetCard);
@@ -210,21 +175,76 @@ public class MissionManager : MonoBehaviour
         return GameManager.Instance.players[idx];
     }
 
+    // 미배정 풀 크기 (관측/마스킹용)
+    public int PoolCount => taskPool.Count;
+
     // ---------------------------------------------------------------
-    // 인간 플레이어가 태스크 풀 인덱스를 선택
+    // 드래프트 턴 엔진 — 함장부터 시계방향, ML 주도.
+    //   AI: 정책(RequestDecision→OnActionReceived→AgentSelectTask)
+    //   인간: UI 버튼/키 (HumanPickTask / HumanPassTask)
     // ---------------------------------------------------------------
+    private void GiveSelectionTurn()
+    {
+        if (taskPool.Count == 0) { CompleteTaskSelection(); return; }
+        var picker = GetCurrentPickingPlayer();
+        if (picker == null) { CompleteTaskSelection(); return; }
+
+        if (picker.isHumanPlayer)
+        {
+            Debug.Log($"[Mission] 인간 차례 — 풀 {taskPool.Count}개 / 패스 가능={CanCurrentPickerPass()}");
+            GameManager.Instance.uiManager?.RefreshTaskSelection();
+            return;   // HumanPickTask / HumanPassTask 대기
+        }
+        picker.RequestDecision();
+    }
+
+    // 현재 선택자가 패스 가능한가: 남은 task < 이번 라운드 남은 플레이어 수
+    //   R = N - (cursor % N), 패스 가능 ⇔ T < R  (T >= R 이면 강제 선택)
+    public bool CanCurrentPickerPass()
+    {
+        int n = GameManager.Instance.players.Count;
+        if (n == 0) return false;
+        int remainingInRound = n - (selectionCursor % n);
+        return taskPool.Count < remainingInRound;
+    }
+
+    // AI 정책의 선택 결정 (CrewAgent.OnActionReceived → 선택 페이즈에서 호출)
+    public void AgentSelectTask(CrewAgent picker, int poolSlot, bool wantPass)
+    {
+        if (GetCurrentPickingPlayer() != picker) return;      // 차례 아님 → 무시
+        if (taskPool.Count == 0) { CompleteTaskSelection(); return; }
+
+        if (wantPass && CanCurrentPickerPass())
+        {
+            selectionCursor++;
+            GiveSelectionTurn();
+            return;
+        }
+
+        AssignTask(Mathf.Clamp(poolSlot, 0, taskPool.Count - 1), picker);
+        selectionCursor++;
+        GiveSelectionTurn();
+    }
+
+    // 인간: 풀 인덱스 선택
     public void HumanPickTask(int poolIndex)
     {
         var human = GameManager.Instance.players[0];
-        if (GetCurrentPickingPlayer() != human)
-        {
-            Debug.LogWarning("[Mission] 인간의 선택 차례가 아닙니다.");
-            return;
-        }
+        if (GetCurrentPickingPlayer() != human) { Debug.LogWarning("[Mission] 인간의 선택 차례가 아닙니다."); return; }
         if (poolIndex < 0 || poolIndex >= taskPool.Count) return;
-
         AssignTask(poolIndex, human);
-        AdvanceSelection();
+        selectionCursor++;
+        GiveSelectionTurn();
+    }
+
+    // 인간: 패스 (가능할 때만)
+    public void HumanPassTask()
+    {
+        var human = GameManager.Instance.players[0];
+        if (GetCurrentPickingPlayer() != human) return;
+        if (!CanCurrentPickerPass()) { Debug.Log("[Mission] 지금은 패스 불가 (강제 선택)"); return; }
+        selectionCursor++;
+        GiveSelectionTurn();
     }
 
     // ---------------------------------------------------------------
@@ -239,54 +259,12 @@ public class MissionManager : MonoBehaviour
         Debug.Log($"[Mission] {player.name} → {task} 선택");
     }
 
-    // ---------------------------------------------------------------
-    // 다음 선택자로 이동; AI면 자동 선택, 모두 완료면 게임 시작
-    // ---------------------------------------------------------------
-    private void AdvanceSelection()
-    {
-        selectionCursor++;
-        AdvanceUntilHumanOrDone();
-    }
-
-    private void AdvanceUntilHumanOrDone()
-    {
-        int safety = 0;
-        while (taskPool.Count > 0)
-        {
-            if (++safety > 500)
-            {
-                Debug.LogError($"[Mission] AdvanceUntilHumanOrDone 무한루프 감지! " +
-                               $"pool={taskPool.Count} cursor={selectionCursor} order={selectionOrder.Count} → 강제 종료");
-                break;
-            }
-
-            var current = GetCurrentPickingPlayer();
-            if (current == null)
-            {
-                Debug.LogError($"[Mission] GetCurrentPickingPlayer() null → cursor={selectionCursor}");
-                break;
-            }
-
-            // 인간 플레이어 차례 → UI 갱신 후 대기
-            if (current.isHumanPlayer)
-            {
-                Debug.Log($"[Mission] 인간 차례 — 태스크 풀 {taskPool.Count}개, 키 1~{taskPool.Count} 또는 버튼으로 선택");
-                GameManager.Instance.uiManager?.RefreshTaskSelection();
-                return;
-            }
-
-            // AI 자동 선택
-            int randIdx = Random.Range(0, taskPool.Count);
-            AssignTask(randIdx, current);
-            selectionCursor++;
-        }
-
-        // 풀이 비었으면 선택 완료
-        CompleteTaskSelection();
-    }
-
     private void CompleteTaskSelection()
     {
+        // 베이스라인/관측 호환: 단일 담당자 개념은 tasks[0] 소유자로 대표
+        phase1Assignee = tasks.Count > 0 ? tasks[0].assignedTo : null;
+        epTargetHeldByAssignee = phase1Assignee != null && tasks.Count > 0
+                                 && phase1Assignee.hand.Contains(tasks[0].targetCard);
         LogTaskSummary();
         GameManager.Instance.uiManager?.HideTaskSelection();
         GameManager.Instance.trickManager.StartPlaying();
@@ -551,9 +529,14 @@ public class MissionManager : MonoBehaviour
     public int GetTrickWinCount(CrewAgent agent)
         => trickWinCounts.TryGetValue(agent, out var n) ? n : 0;
 
-    // ── Phase1 역할 조회 (관찰/계측용) ─────────────────────────────
+    // ── 역할 조회 (관찰/계측용) — 다중 task: 'task를 1개라도 소유했는가' ──
     public bool IsPhase1Assignee(CrewAgent a)
-        => Phase == TrainingMode.Phase1_CoopSingle && a == phase1Assignee;
+        => tasks.Exists(t => t.assignedTo == a);
+
+    // 해당 플레이어가 자기 task의 타깃 카드를 손에 들고 있는가 (관찰용)
+    public bool HoldsOwnTaskTarget(CrewAgent a)
+        => a != null && tasks.Exists(t => t.assignedTo == a
+                                          && t.targetCard != null && a.hand.Contains(t.targetCard));
 
     // Phase1 담당자의 타깃 카드 (관찰/계측용). 그 외엔 null.
     public Card CurrentTargetCard()
