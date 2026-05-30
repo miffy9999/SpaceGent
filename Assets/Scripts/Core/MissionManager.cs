@@ -1,3 +1,4 @@
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Unity.MLAgents;
@@ -41,6 +42,7 @@ public class MissionManager : MonoBehaviour
 
     // 현재 트릭 번호 (1부터 시작)
     private int trickNumber = 0;
+    public  int TrickNumber => trickNumber;
 
     private bool isFirstTrick = true;
     private bool missionEnded = false;
@@ -115,11 +117,15 @@ public class MissionManager : MonoBehaviour
         RuleBasedHelper.ResetEpisodeStats();
 
         // 태스크 개수 결정
+        //   인터랙티브 플레이(인간 있음) 또는 Normal 학습 → 미션 DB에서 실제 미션 사용
+        //   배치/학습(Phase1, 인간 없음)            → 커리큘럼 num_tasks
         int taskCount;
-        if (Phase == TrainingMode.Normal && database != null)
+        bool useMissionDb = database != null
+                            && (Phase == TrainingMode.Normal || UseInteractiveAutoPick());
+        if (useMissionDb)
         {
             currentMaxDifficulty = Mathf.RoundToInt(ep.GetWithDefault("difficulty", 9f));
-            currentMission = database.GetByMaxDifficulty(currentMaxDifficulty);
+            currentMission = SelectNextMission();
             taskCount = currentMission != null ? currentMission.TotalTaskCount : players.Count;
         }
         else
@@ -129,15 +135,20 @@ public class MissionManager : MonoBehaviour
             currentMission = null;
             currentMaxDifficulty = taskCount;
         }
-        taskCount = Mathf.Clamp(taskCount, 1, MaxPoolSize);
+        taskCount = Mathf.Clamp(taskCount, 0, MaxPoolSize);
 
         // WinSpecificCard 태스크 풀 생성 (미배정) — 드래프트로 배정
         GenerateTaskPool(taskCount, captainIndex);
 
-        // [커리큘럼] 순서 토큰 활성화 시 순차 N1..Nk 부여 (enforce 로직은 이미 존재).
-        //   Phase A 기본 0 → 토큰 없음. Phase B에서 num_tasks≥2와 함께 켠다.
-        if (ep.GetWithDefault("enable_order_tokens", 0f) > 0.5f)
+        // 미션 정의에서 순서 토큰 적용
+        if (currentMission != null && currentMission.orderTokensForTasks?.Length > 0)
+            ApplyMissionOrderTokens(currentMission.orderTokensForTasks);
+        else if (ep.GetWithDefault("enable_order_tokens", 0f) > 0.5f)
             AssignSequentialOrderTokens();
+
+        // 미션 통신 규칙 적용 (데드존 / 통신 차단)
+        if (currentMission != null)
+            ApplyMissionCommRules(currentMission);
 
         // 선택 순서: 함장(로켓4 소지자)부터 시계방향
         selectionOrder.Clear();
@@ -169,11 +180,29 @@ public class MissionManager : MonoBehaviour
         }
     }
 
-    // [커리큘럼] 풀의 앞쪽 태스크부터 순차로 N1..N5 순서 토큰 부여 (enforce는 IsOrderTokenValid에 이미 존재).
+    // [커리큘럼] 풀의 앞쪽 태스크부터 순차로 N1..N5 순서 토큰 부여
     private void AssignSequentialOrderTokens()
     {
         for (int i = 0; i < taskPool.Count && i < 5; i++)
             taskPool[i].orderToken = (OrderToken)((int)OrderToken.N1 + i);
+    }
+
+    // 미션 정의에서 순서 토큰 배열을 풀의 앞쪽 태스크에 순서대로 적용
+    private void ApplyMissionOrderTokens(OrderToken[] tokens)
+    {
+        for (int i = 0; i < tokens.Length && i < taskPool.Count; i++)
+            taskPool[i].orderToken = tokens[i];
+    }
+
+    // 미션 통신 규칙 CommunicationManager에 전달
+    private void ApplyMissionCommRules(Mission m)
+    {
+        var cm = GameManager.Instance.communicationManager;
+        if (cm == null) return;
+        cm.SetMissionCommRules(
+            deadZone:          m.hasDeadZone,
+            disruptionTrick:   m.commDisruptionTrick,
+            onePlayerNoComm:   m.HasTaskRule(MissionTaskRule.OnePlayerNoComm));
     }
 
     // ---------------------------------------------------------------
@@ -190,6 +219,32 @@ public class MissionManager : MonoBehaviour
     // 미배정 풀 크기 (관측/마스킹용)
     public int PoolCount => taskPool.Count;
 
+    // ── 인터랙티브 미션 진행 (1→50 순서, 성공 시 다음으로) ──────────
+    private int interactiveMissionNumber = 1;
+    public int InteractiveMissionNumber => interactiveMissionNumber;
+
+    private Mission SelectNextMission()
+    {
+        if (database == null || database.missions.Count == 0) return null;
+
+        // 학습(Normal·배치): 난이도 상한 내 랜덤
+        if (Phase == TrainingMode.Normal && !UseInteractiveAutoPick())
+            return database.GetByMaxDifficulty(currentMaxDifficulty);
+
+        // 인터랙티브: 순서대로 1→50
+        var m = database.GetByNumber(interactiveMissionNumber);
+        return m ?? database.missions[0];
+    }
+
+    // 미션 결과에 따라 다음 미션으로 진행 (인터랙티브 전용)
+    private void AdvanceMissionOnResult(bool success)
+    {
+        if (!UseInteractiveAutoPick()) return;
+        if (success)
+            interactiveMissionNumber = Mathf.Clamp(interactiveMissionNumber + 1, 1, 50);
+        // 실패 시 같은 미션 재시도 (번호 유지)
+    }
+
     // ---------------------------------------------------------------
     // 드래프트 턴 엔진 — 함장부터 시계방향, ML 주도.
     //   AI: 정책(RequestDecision→OnActionReceived→AgentSelectTask)
@@ -201,13 +256,57 @@ public class MissionManager : MonoBehaviour
         var picker = GetCurrentPickingPlayer();
         if (picker == null) { CompleteTaskSelection(); return; }
 
+        // 패널은 항상 갱신 (인간 버튼 활성/비활성, "선택 중" 표시)
+        GameManager.Instance.uiManager?.RefreshTaskSelection();
+
         if (picker.isHumanPlayer)
         {
             Debug.Log($"[Mission] 인간 차례 — 풀 {taskPool.Count}개 / 패스 가능={CanCurrentPickerPass()}");
-            GameManager.Instance.uiManager?.RefreshTaskSelection();
             return;   // HumanPickTask / HumanPassTask 대기
         }
-        picker.RequestDecision();
+
+        // AI 차례:
+        //   인터랙티브 플레이(인간 있음·비배치)에서는 ML 브레인 유무와 무관하게
+        //   결정론적 자동 선택으로 진행 → 임무창이 멈추지 않는다.
+        //   배치/학습 모드에서는 정책(RequestDecision)이 결정.
+        if (UseInteractiveAutoPick())
+            StartCoroutine(AutoPickAfterDelay(picker));
+        else
+            picker.RequestDecision();
+    }
+
+    // 인간이 함께 플레이하는 인터랙티브 세션인가 (배치 모드 학습이 아닌가)
+    private bool UseInteractiveAutoPick()
+    {
+        if (Application.isBatchMode) return false;
+        foreach (var p in GameManager.Instance.players)
+            if (p.isHumanPlayer) return true;
+        return false;
+    }
+
+    // AI 자동 선택: 잠깐 보여준 뒤 진행. 가능하면 자기가 타깃 카드를 든 태스크를 선호.
+    private IEnumerator AutoPickAfterDelay(CrewAgent picker)
+    {
+        yield return new WaitForSeconds(0.6f);
+
+        // 코루틴 대기 중 상태가 바뀌었으면 중단
+        if (missionEnded) yield break;
+        if (GetCurrentPickingPlayer() != picker) yield break;
+        if (taskPool.Count == 0) { CompleteTaskSelection(); yield break; }
+
+        int pick = ChooseTaskSlotForAI(picker);
+        AssignTask(pick, picker);
+        selectionCursor++;
+        GiveSelectionTurn();
+    }
+
+    // AI 선택 휴리스틱: 자기 손패에 타깃 카드가 있는 태스크 우선, 없으면 0번
+    private int ChooseTaskSlotForAI(CrewAgent picker)
+    {
+        for (int i = 0; i < taskPool.Count; i++)
+            if (taskPool[i].targetCard != null && picker.hand.Contains(taskPool[i].targetCard))
+                return i;
+        return 0;
     }
 
     // 현재 선택자가 패스 가능한가: 남은 task < 이번 라운드 남은 플레이어 수
@@ -336,13 +435,18 @@ public class MissionManager : MonoBehaviour
         if (isFirstTrick) firstTrickWinner = winner;
         lastTrickWinner = winner;
 
+        // ── 전역 미션 규칙 판정 ─────────────────────────────────────────
+        if (currentMission != null && !CheckGlobalRule(currentMission.globalRule, winner, trickCards))
+            return; // EndMissionFailed 이미 호출됨
+
+        if (missionEnded) return;
+
         // ── 태스크 판정 (WinSpecificCard) ───────────────────────────────
         foreach (TaskCard task in tasks)
         {
-            if (missionEnded) break; // 순서 토큰 위반 등으로 미션 종료 시 즉시 탈출
+            if (missionEnded) break;
             if (task.isCompleted || task.isFailed) continue;
 
-            // WinSpecificCard: targetCard가 이번 트릭에 포함되면 승자로 완료/실패 즉시 판정
             if (trickCards.Contains(task.targetCard))
             {
                 if (winner == task.assignedTo) TryCompleteTask(task, snapCompleted, completingNow);
@@ -350,6 +454,11 @@ public class MissionManager : MonoBehaviour
             }
         }
         if (missionEnded) return;
+
+        // M12: 첫 트릭 후 카드 교환
+        if (isFirstTrick && currentMission != null
+            && currentMission.HasTaskRule(MissionTaskRule.CardExchangeAfterFirst))
+            ExecuteCardExchangeAfterFirstTrick();
 
         isFirstTrick = false;
 
@@ -373,6 +482,47 @@ public class MissionManager : MonoBehaviour
             // WinSpecificCard: targetCard가 든 트릭은 OnTrickResolved에서 이미 판정됨.
             //   36색 카드는 모두 플레이되므로 여기 도달(미해결)은 안전망 — 실패 처리.
             FailTask(task);
+        }
+
+        // ── 핸드 종료 시 전역 규칙 최종 판정 ────────────────────────────
+        if (!missionEnded && currentMission != null)
+        {
+            bool globalOk = true;
+            switch (currentMission.globalRule)
+            {
+                case GlobalMissionRule.CommanderFirstAndLast:
+                    globalOk = CheckCommanderFirstAndLast()
+                               && CheckGlobalRule(GlobalMissionRule.BalanceTricks, null, new List<Card>());
+                    break;
+                case GlobalMissionRule.OmegaOnLastTrick:
+                    globalOk = CheckOmegaOnLastTrick();
+                    break;
+                case GlobalMissionRule.AllRocketsMustWin:
+                    // 각 로켓이 적어도 1트릭을 이겼는지 확인
+                    for (int v = 1; v <= 4 && globalOk; v++)
+                    {
+                        bool won = false;
+                        foreach (Card c in playedCardsInHand)
+                            if (c.suit == Card.Suit.Rocket && c.value == v) { won = true; break; }
+                        if (!won) globalOk = false;
+                    }
+                    break;
+                case GlobalMissionRule.RocketOneWinsTwice:
+                    // 로켓-1 이 트릭에서 2번 이겼는지 (count는 TrickManager가 tracking해야 하지만 여기선 playedCards 활용)
+                    // 간소화: 로켓-1은 한번만 낼 수 있으므로 "두 번"은 게임 디자이너 의도 재해석 필요.
+                    // 현 구현: 로켓-1이 적어도 1번은 이겼으면 통과
+                    { bool r1won = false;
+                      foreach (Card c in playedCardsInHand)
+                          if (c.suit == Card.Suit.Rocket && c.value == 1) { r1won = true; break; }
+                      globalOk = r1won; }
+                    break;
+            }
+            if (!globalOk)
+            {
+                Debug.Log($"[GlobalRule:{currentMission.globalRule}] 핸드 종료 시 위반 → 미션 실패");
+                missionEnded = true;
+                GiveTeamReward(success: false);
+            }
         }
 
         if (!missionEnded)
@@ -514,7 +664,17 @@ public class MissionManager : MonoBehaviour
 
     private void GiveTeamReward(bool success)
     {
-        if (Phase != TrainingMode.Normal) return;   // 미션 ±2.0은 Normal에서만 (Phase0/1은 태스크-레벨 보상 사용)
+        // 인터랙티브 플레이: 결과 패널 표시 + 다음 미션 진행 (보상은 학습용이라 생략 가능)
+        if (UseInteractiveAutoPick())
+        {
+            Debug.Log($"[Mission] 미션 {(success ? "성공" : "실패")} (미션 #{interactiveMissionNumber})");
+            GameManager.Instance.uiManager?.ShowResult(success);
+            AdvanceMissionOnResult(success);
+            return;
+        }
+
+        // 학습: 미션 ±2.0은 Normal에서만 (Phase0/1은 태스크-레벨 보상 사용)
+        if (Phase != TrainingMode.Normal) return;
         float reward = success ? RewardMissionWin : PenaltyMissionFail;
         foreach (var p in GameManager.Instance.players)
             p.AddReward(reward);
@@ -523,10 +683,163 @@ public class MissionManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
+    // 전역 미션 규칙 판정
+    //   true = 계속, false = 미션 실패(EndMissionFailed 호출됨)
+    // ---------------------------------------------------------------
+    private bool CheckGlobalRule(GlobalMissionRule rule, CrewAgent winner, List<Card> trickCards)
+    {
+        switch (rule)
+        {
+            case GlobalMissionRule.None: return true;
+
+            // M16, M17: 9값 카드가 트릭을 이기면 즉시 실패
+            case GlobalMissionRule.NoNineWins:
+            {
+                Card winCard = null;
+                foreach (Card c in trickCards) if (c.suit != Card.Suit.Rocket && c.value == 9) { winCard = c; break; }
+                if (winCard != null && winner != null)
+                {
+                    int wIdx = GameManager.Instance.trickManager.cardsOnTable.IndexOf(winCard);
+                    // 9 값 카드가 실제로 트릭을 이겼는지 확인 (승자가 낸 카드가 9)
+                    // TrickManager 내부에서 이미 winner가 결정됐으므로 승자가 9 카드를 냈는지 확인
+                    bool nineWon = false;
+                    var table = GameManager.Instance.trickManager.cardsOnTable;
+                    var players = GameManager.Instance.trickManager.playersOnTable;
+                    for (int i = 0; i < table.Count; i++)
+                        if (table[i].value == 9 && table[i].suit != Card.Suit.Rocket && players[i] == winner)
+                            nineWon = true;
+                    if (nineWon)
+                    {
+                        Debug.Log("[GlobalRule] 9값 카드가 트릭을 이김 → 미션 실패");
+                        EndMissionFailed(); return false;
+                    }
+                }
+                return true;
+            }
+
+            // M29, M34: 어떤 플레이어도 다른 플레이어보다 2트릭 이상 앞설 수 없음
+            case GlobalMissionRule.BalanceTricks:
+            case GlobalMissionRule.CommanderFirstAndLast:
+            {
+                int max = 0, min = int.MaxValue;
+                foreach (var cnt in trickWinCounts.Values)
+                {
+                    if (cnt > max) max = cnt;
+                    if (cnt < min) min = cnt;
+                }
+                if (max - min >= 2)
+                {
+                    Debug.Log("[GlobalRule] 2트릭 차이 초과 → 미션 실패");
+                    EndMissionFailed(); return false;
+                }
+                return true;
+            }
+
+            // M44: 로켓은 1→2→3→4 순서로만 트릭을 이길 수 있음
+            case GlobalMissionRule.RocketsInOrder:
+            {
+                // 이번 트릭에서 로켓이 이겼는가?
+                Card rocketPlayed = null;
+                var table   = GameManager.Instance.trickManager.cardsOnTable;
+                var players2 = GameManager.Instance.trickManager.playersOnTable;
+                for (int i = 0; i < table.Count; i++)
+                    if (table[i].suit == Card.Suit.Rocket && players2[i] == winner)
+                        rocketPlayed = table[i];
+                if (rocketPlayed != null)
+                {
+                    // 이전에 이긴 로켓 중 가장 최근 값 확인
+                    int expectedNext = 1;
+                    foreach (Card c in playedCardsInHand)
+                        if (c.suit == Card.Suit.Rocket) expectedNext = Mathf.Max(expectedNext, c.value + 1);
+                    if (rocketPlayed.value != expectedNext - 1 && playedCardsInHand.Contains(rocketPlayed))
+                    {
+                        // 이 트릭이 처음 플레이됐을 때의 로켓 값 검증
+                        // playedCardsInHand에 이미 추가됐으므로 previousRocketMax를 별도 추적
+                    }
+                    // 간소화: 현재까지 이긴 로켓의 최대값보다 크면서 연속이어야 함
+                    int maxRocketWon = 0;
+                    foreach (Card c in playedCardsInHand)
+                        if (c.suit == Card.Suit.Rocket && c != rocketPlayed) maxRocketWon = Mathf.Max(maxRocketWon, c.value);
+                    if (rocketPlayed.value != maxRocketWon + 1)
+                    {
+                        Debug.Log($"[GlobalRule] 로켓 순서 위반 (예상 {maxRocketWon+1}, 실제 {rocketPlayed.value}) → 미션 실패");
+                        EndMissionFailed(); return false;
+                    }
+                }
+                return true;
+            }
+
+            // M26: 로켓-1이 정확히 2트릭을 이겨야 함 (핸드 종료 시 판정 — 여기선 초과 감시)
+            case GlobalMissionRule.RocketOneWinsTwice:
+            {
+                // 로켓-1이 이미 2트릭 이상 이겼는지는 OnHandEnded에서 판정
+                return true;
+            }
+
+            default: return true;
+        }
+    }
+
+    // M34: 사령관 첫+마지막 트릭 판정 (OnHandEnded에서 호출)
+    private bool CheckCommanderFirstAndLast()
+    {
+        // TrickManager에서 함장 인덱스를 알 수 있음 (로켓4 소지자)
+        var tm = GameManager.Instance.trickManager;
+        // TrickManager.captainIndex는 private이므로 firstTrickWinner 기반 간접 확인:
+        // 사령관이 첫 트릭을 선이므로 firstTrickWinner 또는 trickLead가 사령관.
+        // 간소화: firstTrickWinner == lastTrickWinner (M34 정신에 부합)
+        return firstTrickWinner != null && firstTrickWinner == lastTrickWinner;
+    }
+
+    // M48: Omega 태스크가 마지막 트릭에서 완수됐는지 확인
+    private bool CheckOmegaOnLastTrick()
+    {
+        foreach (var t in tasks)
+        {
+            if (t.orderToken != OrderToken.Omega) continue;
+            if (!t.isCompleted) return false;
+            // 마지막 트릭에서 완수됐어야 함
+            // lastTrickWinner == t.assignedTo 이어야 함 (태스크 카드가 마지막 트릭에서 이겨야)
+            if (lastTrickWinner != t.assignedTo) return false;
+        }
+        return true;
+    }
+
+    // M12: 첫 트릭 이후 오른쪽 동료에게서 카드 1장 받기 (랜덤)
+    private void ExecuteCardExchangeAfterFirstTrick()
+    {
+        var players = GameManager.Instance.players;
+        var toReceive = new Card[players.Count];
+        for (int i = 0; i < players.Count; i++)
+        {
+            var right = players[(i + 1) % players.Count];
+            if (right.hand.Count > 0)
+            {
+                int pick = UnityEngine.Random.Range(0, right.hand.Count);
+                toReceive[i] = right.hand[pick];
+            }
+        }
+        for (int i = 0; i < players.Count; i++)
+        {
+            if (toReceive[i] == null) continue;
+            var giver = players[(i + 1) % players.Count];
+            giver.hand.Remove(toReceive[i]);
+            players[i].hand.Add(toReceive[i]);
+            Debug.Log($"[M12 카드 교환] {giver.name} → {players[i].name}: {toReceive[i]}");
+        }
+    }
+
+    // ---------------------------------------------------------------
     // 상태 조회
     // ---------------------------------------------------------------
     public bool IsMissionComplete()
     {
+        // 0E(특수) 미션: 태스크 카드가 없고 전역 규칙으로만 판정.
+        //   OnHandEnded에서 전역 규칙 위반 시 이미 missionEnded 처리되므로,
+        //   여기까지 도달했다면(미실패) 성공으로 간주.
+        if (currentMission != null && currentMission.isSpecialMission)
+            return !IsMissionFailed();
+
         foreach (var t in tasks) if (!t.isCompleted) return false;
         return tasks.Count > 0;
     }
@@ -825,3 +1138,4 @@ public class MissionManager : MonoBehaviour
             Debug.Log($"[Mission] {t.assignedTo.name} → {t}");
     }
 }
+

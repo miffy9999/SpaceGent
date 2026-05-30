@@ -106,62 +106,73 @@ public static class CreateGameUIEditor
 
         ui.leadSuitText = Txt(topBar.transform, "LeadSuitText", "선 색상: -", 14, ColTxt,
             TextAlignmentOptions.MidlineLeft,
-            new Vector2(0f, 0f), new Vector2(0.25f, 1f),
+            new Vector2(0f, 0f), new Vector2(0.22f, 1f),
             new Vector2(14f, 0f), Vector2.zero);
 
         ui.turnText = Txt(topBar.transform, "TurnText", "[ - ]", 18, Color.white,
             TextAlignmentOptions.Center,
-            new Vector2(0.25f, 0f), new Vector2(0.75f, 1f),
+            new Vector2(0.22f, 0f), new Vector2(0.56f, 1f),
+            Vector2.zero, Vector2.zero);
+
+        // 통신 차단 / 데드존 상태 (TurnText와 TrickCount 사이)
+        ui.commStatusText = Txt(topBar.transform, "CommStatusText", "", 12,
+            new Color(1f, 0.5f, 0.2f, 1f), TextAlignmentOptions.Center,
+            new Vector2(0.56f, 0f), new Vector2(0.78f, 1f),
             Vector2.zero, Vector2.zero);
 
         ui.trickCountText = Txt(topBar.transform, "TrickCountText", "Trick 1 / 10", 14, ColTxt,
             TextAlignmentOptions.MidlineRight,
-            new Vector2(0.75f, 0f), new Vector2(1f, 1f),
+            new Vector2(0.78f, 0f), new Vector2(1f, 1f),
             Vector2.zero, new Vector2(-14f, 0f));
 
         // ── 2. 플레이어 슬롯 4개 (2×2, 순수 앵커 비율) ─────────────
-        // players[1] → 왼쪽 위
-        MakePlayerSlot(R, "PlayerSlot_1", "플레이어 1",
+        MakePlayerSlot(R, "PlayerSlot_1", "크루원 1",
             new Vector2(SlotLMin, SlotTopBotY), new Vector2(SlotLMax, SlotTopY),
             ui, playerIndex: 1, uiAiIndex: 0);
 
-        // players[3] → 오른쪽 위
-        MakePlayerSlot(R, "PlayerSlot_3", "플레이어 3",
+        MakePlayerSlot(R, "PlayerSlot_3", "크루원 3",
             new Vector2(SlotRMin, SlotTopBotY), new Vector2(SlotRMax, SlotTopY),
             ui, playerIndex: 3, uiAiIndex: 2);
 
-        // players[2] → 왼쪽 아래
-        MakePlayerSlot(R, "PlayerSlot_2", "플레이어 2",
+        MakePlayerSlot(R, "PlayerSlot_2", "크루원 2",
             new Vector2(SlotLMin, SlotBotY), new Vector2(SlotLMax, SlotBotTopY),
             ui, playerIndex: 2, uiAiIndex: 1);
 
-        // players[0] → 오른쪽 아래 (나)
-        MakePlayerSlot(R, "PlayerSlot_0", "나 (플레이어)",
+        MakePlayerSlot(R, "PlayerSlot_0", "나 (사령관?)",
             new Vector2(SlotRMin, SlotBotY), new Vector2(SlotRMax, SlotBotTopY),
             ui, playerIndex: 0, uiAiIndex: -1);
 
         // ── 3. 중앙 미션 패널 ──────────────────────────────────────────
         var mPanel = AnchorPanel(R, "MissionPanel", BgMid,
-            new Vector2(0.34f, 0.41f), new Vector2(0.66f, 0.80f));
+            new Vector2(0.30f, 0.38f), new Vector2(0.70f, 0.82f));
 
-        Txt(mPanel.transform, "MissionTitle", "미션", 14, ColTxt,
+        Txt(mPanel.transform, "MissionTitle", "임무", 14, new Color(0.80f, 0.90f, 1.00f, 1f),
             TextAlignmentOptions.Center,
-            new Vector2(0f, 0.82f), new Vector2(1f, 1f),
+            new Vector2(0f, 0.86f), new Vector2(1f, 1f),
             Vector2.zero, Vector2.zero);
 
         var mImgGO = new GameObject("MissionImage", typeof(RectTransform), typeof(Image));
         mImgGO.transform.SetParent(mPanel.transform, false);
         var mRT = mImgGO.GetComponent<RectTransform>();
-        mRT.anchorMin = new Vector2(0.05f, 0.18f);
-        mRT.anchorMax = new Vector2(0.95f, 0.82f);
+        mRT.anchorMin = new Vector2(0.05f, 0.40f);
+        mRT.anchorMax = new Vector2(0.95f, 0.86f);
         mRT.offsetMin = mRT.offsetMax = Vector2.zero;
         ui.missionImage = mImgGO.GetComponent<Image>();
-        ui.missionImage.color = new Color(0.95f, 0.78f, 0.18f, 0.85f);
+        ui.missionImage.color = new Color(0.80f, 0.90f, 1.00f, 0.85f);
 
-        ui.missionIdText = Txt(mPanel.transform, "MissionIdText", "미션 ---", 12, ColTxt,
+        ui.missionIdText = Txt(mPanel.transform, "MissionIdText", "MISSION --", 13,
+            new Color(0.80f, 0.90f, 1.00f, 1f),
             TextAlignmentOptions.Center,
-            new Vector2(0f, 0f), new Vector2(1f, 0.18f),
+            new Vector2(0f, 0.24f), new Vector2(1f, 0.40f),
             Vector2.zero, Vector2.zero);
+
+        // 미션 특수 규칙 표시 (데드존 / 통신차단 등)
+        ui.missionRuleText = Txt(mPanel.transform, "MissionRuleText", "", 10,
+            new Color(1.00f, 0.85f, 0.30f, 1f),
+            TextAlignmentOptions.Center,
+            new Vector2(0f, 0.02f), new Vector2(1f, 0.24f),
+            new Vector2(4f, 0f), new Vector2(-4f, 0f));
+        ui.missionRuleText.textWrappingMode = TextWrappingModes.Normal;
 
         // ── 4. 손패 영역 (하단) ────────────────────────────────────────
         var handBg = AnchorPanel(R, "HandArea", new Color(0.04f, 0.07f, 0.12f, 0.80f),
@@ -195,12 +206,18 @@ public static class CreateGameUIEditor
         ui.resultPanel = resultBg;
         resultBg.SetActive(false);
 
-        // ── 6. 태스크 선택 오버레이 ───────────────────────────────────
+        // ── 6. 임무 선택 오버레이 (Space Crew 스타일) ────────────────
         var taskSelPanel = AnchorPanel(R, "TaskSelectionPanel",
-            new Color(0f, 0f, 0f, 0.85f), Vector2.zero, Vector2.one);
+            new Color(0.02f, 0.04f, 0.10f, 0.92f), Vector2.zero, Vector2.one);
+
+        // 우주 느낌 헤더
+        Txt(taskSelPanel.transform, "TaskSelHeader", "[ 임 무 할 당 ]", 14,
+            new Color(0.80f, 0.90f, 1.00f, 0.70f), TextAlignmentOptions.Center,
+            new Vector2(0.1f, 0.88f), new Vector2(0.9f, 0.96f),
+            Vector2.zero, Vector2.zero);
 
         ui.taskSelectionTitle = Txt(taskSelPanel.transform, "TaskSelTitle",
-            "태스크를 선택하세요", 26, Color.white, TextAlignmentOptions.Center,
+            "임무를 선택하세요", 26, Color.white, TextAlignmentOptions.Center,
             new Vector2(0.1f, 0.72f), new Vector2(0.9f, 0.88f),
             Vector2.zero, Vector2.zero);
 
@@ -219,6 +236,55 @@ public static class CreateGameUIEditor
         ui.taskItemPrefab     = MakeTaskItemPrefab();
         taskSelPanel.SetActive(false);
         ui.taskSelectionPanel = taskSelPanel;
+
+        // ── 7. 조난신호 결정 패널 ─────────────────────────────────────
+        var dsPanelBg = AnchorPanel(R, "DistressSignalPanel",
+            new Color(0.12f, 0.04f, 0.02f, 0.94f), Vector2.zero, Vector2.one);
+
+        Txt(dsPanelBg.transform, "DSHeader", "-- 조난신호 --", 20,
+            new Color(1f, 0.5f, 0.2f, 1f), TextAlignmentOptions.Center,
+            new Vector2(0.2f, 0.70f), new Vector2(0.8f, 0.82f),
+            Vector2.zero, Vector2.zero);
+
+        var dsStatusGO = new GameObject("StatusText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        dsStatusGO.transform.SetParent(dsPanelBg.transform, false);
+        var dsRT = dsStatusGO.GetComponent<RectTransform>();
+        dsRT.anchorMin = new Vector2(0.1f, 0.42f);
+        dsRT.anchorMax = new Vector2(0.9f, 0.70f);
+        dsRT.offsetMin = dsRT.offsetMax = Vector2.zero;
+        var dsTmp = dsStatusGO.GetComponent<TextMeshProUGUI>();
+        dsTmp.text = "조난신호를 사용하시겠습니까?\nD키: 카드 전달  /  Space·Enter: 건너뛰기";
+        dsTmp.fontSize = 18; dsTmp.color = Color.white; dsTmp.alignment = TextAlignmentOptions.Center;
+        if (_font != null) dsTmp.font = _font;
+        ui.distressSignalPanel = dsPanelBg;
+        ui.distressSignalStatusText = dsTmp;
+
+        // 조난신호: 사용 버튼
+        var dsBtnGO = new GameObject("UseBtn",
+            typeof(RectTransform), typeof(Image), typeof(Button));
+        dsBtnGO.transform.SetParent(dsPanelBg.transform, false);
+        var dsBtnRT = dsBtnGO.GetComponent<RectTransform>();
+        dsBtnRT.anchorMin = new Vector2(0.20f, 0.22f);
+        dsBtnRT.anchorMax = new Vector2(0.48f, 0.40f);
+        dsBtnRT.offsetMin = dsBtnRT.offsetMax = Vector2.zero;
+        dsBtnGO.GetComponent<Image>().color = new Color(0.80f, 0.30f, 0.10f, 1f);
+        Txt(dsBtnGO.transform, "L", "조난신호 사용", 14, Color.white, TextAlignmentOptions.Center,
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        ui.useDistressSignalButton = dsBtnGO.GetComponent<Button>();
+
+        // 조난신호: 건너뛰기 버튼
+        var skipBtnGO = new GameObject("SkipBtn",
+            typeof(RectTransform), typeof(Image), typeof(Button));
+        skipBtnGO.transform.SetParent(dsPanelBg.transform, false);
+        var skipBtnRT = skipBtnGO.GetComponent<RectTransform>();
+        skipBtnRT.anchorMin = new Vector2(0.52f, 0.22f);
+        skipBtnRT.anchorMax = new Vector2(0.80f, 0.40f);
+        skipBtnRT.offsetMin = skipBtnRT.offsetMax = Vector2.zero;
+        skipBtnGO.GetComponent<Image>().color = new Color(0.25f, 0.25f, 0.35f, 1f);
+        Txt(skipBtnGO.transform, "L", "건너뛰기", 14, Color.white, TextAlignmentOptions.Center,
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        ui.skipDistressSignalButton = skipBtnGO.GetComponent<Button>();
+        dsPanelBg.SetActive(false);
 
         // ── GameManager 자동 연결 ────────────────────────────────────
         var gm = Object.FindFirstObjectByType<GameManager>();
@@ -531,40 +597,26 @@ public static class CreateGameUIEditor
         if (!Directory.Exists(dir)) AssetDatabase.CreateFolder("Assets", "Prefabs");
 
         var item = new GameObject("TaskPoolItem", typeof(RectTransform));
-        item.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 100f);
+        item.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 80f);
         item.AddComponent<Image>().color = new Color(0.1f, 0.12f, 0.18f, 0.92f);
         var btn = item.AddComponent<Button>();
         var bc  = btn.colors;
-        bc.highlightedColor = new Color(1f, 1f, 0.7f, 1f);
+        bc.highlightedColor = new Color(0.25f, 0.45f, 0.8f, 1f);
         bc.pressedColor     = new Color(0.6f, 0.6f, 0.6f, 1f);
         bc.disabledColor    = new Color(0.4f, 0.4f, 0.4f, 0.6f);
         btn.colors = bc;
 
-        // 왼쪽: 태스크 스프라이트 이미지
-        var imgGO = new GameObject("TaskImage", typeof(RectTransform), typeof(Image));
-        imgGO.transform.SetParent(item.transform, false);
-        var imgRT = imgGO.GetComponent<RectTransform>();
-        imgRT.anchorMin = new Vector2(0f, 0f);
-        imgRT.anchorMax = new Vector2(0.45f, 1f);
-        imgRT.offsetMin = new Vector2(6f, 6f);
-        imgRT.offsetMax = new Vector2(-3f, -6f);
-        var imgComp = imgGO.GetComponent<Image>();
-        imgComp.color = Color.white;
-        imgComp.preserveAspect = true;
-        imgComp.raycastTarget = false;
-        imgGO.SetActive(false); // 스프라이트 없으면 숨김
-
-        // 오른쪽: 텍스트
+        // 텍스트 전용 (전체 폭, 중앙 정렬)
         var lbl = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
         lbl.transform.SetParent(item.transform, false);
         var lRT  = lbl.GetComponent<RectTransform>();
-        lRT.anchorMin = new Vector2(0.45f, 0f);
+        lRT.anchorMin = Vector2.zero;
         lRT.anchorMax = Vector2.one;
-        lRT.offsetMin = new Vector2(4f, 6f);
-        lRT.offsetMax = new Vector2(-6f, -6f);
+        lRT.offsetMin = new Vector2(8f, 4f);
+        lRT.offsetMax = new Vector2(-8f, -4f);
         var tmp  = lbl.GetComponent<TextMeshProUGUI>();
-        tmp.text = "태스크 설명"; tmp.fontSize = 13; tmp.color = Color.white;
-        tmp.alignment = TextAlignmentOptions.MidlineLeft;
+        tmp.text = "태스크 설명"; tmp.fontSize = 14; tmp.color = Color.white;
+        tmp.alignment = TextAlignmentOptions.Center;
         tmp.textWrappingMode = TextWrappingModes.Normal;
         if (_font != null) tmp.font = _font;
 
@@ -580,24 +632,10 @@ public static class CreateGameUIEditor
         if (!Directory.Exists(dir)) AssetDatabase.CreateFolder("Assets", "Prefabs");
 
         var item = new GameObject("TaskItem", typeof(RectTransform));
-        item.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 28f);
+        item.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 26f);
         item.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.45f);
 
-        // 왼쪽: 태스크 스프라이트 이미지 (32px 고정폭)
-        var imgGO = new GameObject("TaskImage", typeof(RectTransform), typeof(Image));
-        imgGO.transform.SetParent(item.transform, false);
-        var imgRT = imgGO.GetComponent<RectTransform>();
-        imgRT.anchorMin = new Vector2(0f, 0f);
-        imgRT.anchorMax = new Vector2(0f, 1f);
-        imgRT.offsetMin = new Vector2(3f, 3f);
-        imgRT.offsetMax = new Vector2(29f, -3f); // 26px 너비
-        var imgComp = imgGO.GetComponent<Image>();
-        imgComp.color = Color.white;
-        imgComp.preserveAspect = true;
-        imgComp.raycastTarget = false;
-        imgGO.SetActive(false); // 스프라이트 없으면 숨김
-
-        // 오른쪽: 텍스트 (스프라이트 있으면 왼쪽 32px 비움, 없으면 전체 폭)
+        // 텍스트 전용 (전체 폭). 순서 토큰은 라벨 텍스트의 [1]/[Ω]/[→] 프리픽스로 표현
         var lbl = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
         lbl.transform.SetParent(item.transform, false);
         var lRT  = lbl.GetComponent<RectTransform>();

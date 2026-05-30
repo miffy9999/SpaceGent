@@ -23,8 +23,10 @@ public class GameUIManager : MonoBehaviour
 
     // ── 미션 정보 ─────────────────────────────────────────────────
     [Header("미션 정보")]
-    public Image missionImage;      // 미션 스프라이트
-    public TMP_Text missionIdText;    // "Mission 1-2-3"
+    public Image missionImage;
+    public TMP_Text missionIdText;
+    public TMP_Text missionRuleText;  // 미션 특수 규칙 표시 (데드존, 통신차단 등)
+    public TMP_Text commStatusText;   // TopBar 통신 차단 / 데드존 상태
 
     // ── 플레이어 태스크 패널 (인간 플레이어 기준) ───────────────────
     [Header("태스크 (인간 플레이어)")]
@@ -210,6 +212,28 @@ public class GameUIManager : MonoBehaviour
                 var skipBtn = ds.Find("SkipBtn");
                 if (useBtn  != null) useDistressSignalButton  = useBtn.GetComponent<Button>();
                 if (skipBtn != null) skipDistressSignalButton = skipBtn.GetComponent<Button>();
+            }
+        }
+
+        // 미션 특수 규칙 텍스트 자동 탐색
+        if (missionRuleText == null)
+        {
+            var mp = transform.Find("MissionPanel");
+            if (mp != null)
+            {
+                var rt = mp.Find("MissionRuleText");
+                if (rt != null) missionRuleText = rt.GetComponent<TMP_Text>();
+            }
+        }
+
+        // TopBar 통신 상태 텍스트 자동 탐색
+        if (commStatusText == null)
+        {
+            var tb = transform.Find("TopBar");
+            if (tb != null)
+            {
+                var ct = tb.Find("CommStatusText");
+                if (ct != null) commStatusText = ct.GetComponent<TMP_Text>();
             }
         }
     }
@@ -421,13 +445,17 @@ public class GameUIManager : MonoBehaviour
 
                 if (i < commRevealPositionTexts.Length && commRevealPositionTexts[i] != null)
                 {
-                    commRevealPositionTexts[i].text = ct.revealPosition switch
-                    {
-                        CommunicationToken.RevealPosition.Highest => "▲ 최고값",
-                        CommunicationToken.RevealPosition.Lowest  => "▼ 최저값",
-                        CommunicationToken.RevealPosition.Only    => "● 유일",
-                        _                                         => ""
-                    };
+                    // 데드존: 위치 정보 숨김
+                    if (ct.IsDeadZone)
+                        commRevealPositionTexts[i].text = "? (데드존)";
+                    else
+                        commRevealPositionTexts[i].text = ct.revealPosition switch
+                        {
+                            CommunicationToken.RevealPosition.Highest => "▲ 최고값",
+                            CommunicationToken.RevealPosition.Lowest  => "▼ 최저값",
+                            CommunicationToken.RevealPosition.Only    => "● 유일",
+                            _                                         => ""
+                        };
                 }
             }
 
@@ -507,11 +535,38 @@ public class GameUIManager : MonoBehaviour
         var mm = MissionManager.Instance;
         if (mm == null || mm.currentMission == null) return;
 
-        if (missionImage != null && mm.currentMission.sprite != null)
-            missionImage.sprite = mm.currentMission.sprite;
+        var m = mm.currentMission;
+
+        if (missionImage != null && m.sprite != null)
+            missionImage.sprite = m.sprite;
 
         if (missionIdText != null)
-            missionIdText.text = $"Mission {mm.currentMission.id}";
+            missionIdText.text = $"MISSION {m.number:00}";
+
+        // 미션 특수 규칙 텍스트
+        if (missionRuleText != null)
+        {
+            var sb = new System.Text.StringBuilder();
+            if (m.hasDeadZone)              sb.Append("[데드존]  ");
+            if (m.commDisruptionTrick > 0)  sb.Append($"[통신차단 ~{m.commDisruptionTrick}]  ");
+            if (m.HasTaskRule(MissionTaskRule.CommanderDecision))     sb.Append("[사령관 결정]  ");
+            if (m.HasTaskRule(MissionTaskRule.CommanderDistribution)) sb.Append("[사령관 분배]  ");
+            if (m.globalRule != GlobalMissionRule.None)               sb.Append($"[{m.globalRule}]");
+            missionRuleText.text = sb.ToString().Trim();
+        }
+
+        // TopBar 통신 상태
+        if (commStatusText != null)
+        {
+            var cm = GameManager.Instance?.communicationManager;
+            if (cm == null) { commStatusText.text = ""; return; }
+            if (cm.CommDisruptionTrick > 0 && mm.TrickNumber < cm.CommDisruptionTrick)
+                commStatusText.text = $"[통신 차단 ~트릭{cm.CommDisruptionTrick}]";
+            else if (cm.IsDeadZone)
+                commStatusText.text = "? 데드존";
+            else
+                commStatusText.text = "";
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -570,64 +625,14 @@ public class GameUIManager : MonoBehaviour
 
     private void SetTaskItemDisplay(GameObject item, TaskCard task, TaskSpriteMapping tsm)
     {
-        // TaskImage 없으면 런타임에 동적 생성
+        // Space Crew는 태스크 스프라이트가 없으므로 텍스트 전용으로 표시.
+        // 프리팹에 TaskImage / OrderTokenImage가 있으면 숨긴다.
         var taskImgT = item.transform.Find("TaskImage");
-        if (taskImgT == null)
-        {
-            var imgGO = new GameObject("TaskImage", typeof(RectTransform), typeof(Image));
-            imgGO.transform.SetParent(item.transform, false);
-            var imgRT = imgGO.GetComponent<RectTransform>();
-            imgRT.anchorMin = new Vector2(0f, 0f);
-            imgRT.anchorMax = new Vector2(0f, 1f);
-            imgRT.offsetMin = new Vector2(3f, 3f);
-            imgRT.offsetMax = new Vector2(29f, -3f);
-            var imgComp = imgGO.GetComponent<Image>();
-            imgComp.color = Color.white;
-            imgComp.preserveAspect = true;
-            imgComp.raycastTarget = false;
-            imgGO.SetActive(false);
-            taskImgT = imgGO.transform;
-        }
+        if (taskImgT != null) taskImgT.gameObject.SetActive(false);
+        var orderImgT = item.transform.Find("OrderTokenImage");
+        if (orderImgT != null) orderImgT.gameObject.SetActive(false);
 
-        var taskImg = taskImgT.GetComponent<Image>();
-        bool hasSprite = false;
-        Sprite s = tsm?.GetTaskSprite(task);
-        if (s != null)
-        {
-            taskImg.sprite = s;
-            taskImg.color  = Color.white;
-            taskImgT.gameObject.SetActive(true);
-            hasSprite = true;
-        }
-        else
-        {
-            taskImgT.gameObject.SetActive(false);
-        }
-
-        // 순서 토큰 아이콘 (우측 끝에 표시)
-        var orderTokenImgT = item.transform.Find("OrderTokenImage");
-        if (orderTokenImgT == null && task.orderToken != OrderToken.None)
-        {
-            var oGO = new GameObject("OrderTokenImage", typeof(RectTransform), typeof(Image));
-            oGO.transform.SetParent(item.transform, false);
-            var oRT = oGO.GetComponent<RectTransform>();
-            oRT.anchorMin = new Vector2(1f, 0f);
-            oRT.anchorMax = new Vector2(1f, 1f);
-            oRT.offsetMin = new Vector2(-28f, 2f);
-            oRT.offsetMax = new Vector2(-2f, -2f);
-            var oImg = oGO.GetComponent<Image>();
-            oImg.preserveAspect = true;
-            oImg.raycastTarget  = false;
-            orderTokenImgT = oGO.transform;
-        }
-        if (orderTokenImgT != null)
-        {
-            Sprite tokenSprite = tsm?.GetOrderTokenSprite(task.orderToken);
-            orderTokenImgT.GetComponent<Image>().sprite = tokenSprite;
-            orderTokenImgT.gameObject.SetActive(tokenSprite != null);
-        }
-
-        // 라벨 텍스트 + 색상, 스프라이트 있으면 왼쪽 여백 추가
+        // 라벨 텍스트 + 색상 (순서 토큰은 ToString의 [1]/[Ω]/[→] 프리픽스로 표현)
         TMP_Text label = item.transform.Find("Label")?.GetComponent<TMP_Text>()
                       ?? item.GetComponentInChildren<TMP_Text>();
         if (label != null)
@@ -636,7 +641,7 @@ public class GameUIManager : MonoBehaviour
             label.color = TaskColor(task);
             var lRT = label.GetComponent<RectTransform>();
             if (lRT != null)
-                lRT.offsetMin = hasSprite ? new Vector2(32f, 0f) : new Vector2(5f, 0f);
+                lRT.offsetMin = new Vector2(5f, 0f);  // 스프라이트 없으니 좌측 여백 최소
         }
     }
 
@@ -831,8 +836,6 @@ public class GameUIManager : MonoBehaviour
         var picker2 = mm.GetCurrentPickingPlayer();
         bool humanTurn = picker2 == GameManager.Instance.players[0];
 
-        var tsm = GameManager.Instance.taskSpriteMapping;
-
         for (int i = 0; i < mm.taskPool.Count; i++)
         {
             int capturedIndex = i;
@@ -844,19 +847,19 @@ public class GameUIManager : MonoBehaviour
                 : CreateFallbackPoolItem(taskPoolContainer);
             poolItemObjs.Add(item);
 
-            // 태스크 스프라이트 설정
-            var taskImg = item.transform.Find("TaskImage")?.GetComponent<Image>();
-            if (taskImg != null)
-            {
-                Sprite s = tsm?.GetTaskSprite(task);
-                if (s != null) { taskImg.sprite = s; taskImg.color = Color.white; taskImg.gameObject.SetActive(true); }
-                else taskImg.gameObject.SetActive(false);
-            }
+            // 스프라이트 미사용: TaskImage 숨김 (Space Crew는 태스크 아이콘 없음)
+            var taskImg = item.transform.Find("TaskImage");
+            if (taskImg != null) taskImg.gameObject.SetActive(false);
 
-            // 텍스트 설정
+            // 텍스트 전용 표시 (순서 토큰은 ToString의 [1]/[Ω]/[→] 프리픽스 포함)
             TMP_Text label = item.transform.Find("Label")?.GetComponent<TMP_Text>()
                           ?? item.GetComponentInChildren<TMP_Text>();
-            if (label != null) label.text = task.ToString();
+            if (label != null)
+            {
+                label.text = task.ToString();
+                var lRT = label.GetComponent<RectTransform>();
+                if (lRT != null) { lRT.offsetMin = new Vector2(8f, 4f); lRT.offsetMax = new Vector2(-8f, -4f); }
+            }
 
             // 버튼: 인간 차례일 때만 활성화
             if (item.TryGetComponent<Button>(out var btn))
@@ -866,39 +869,9 @@ public class GameUIManager : MonoBehaviour
                     btn.onClick.AddListener(() => MissionManager.Instance.HumanPickTask(capturedIndex));
             }
 
-            // 배경색 (WinSpecificCard 단일 타입 — 고정 색상)
+            // 배경색
             if (item.TryGetComponent<Image>(out var bg))
-                bg.color = tsm != null ? new Color(0.1f, 0.12f, 0.18f, 0.92f)
-                                       : new Color(0.2f, 0.5f, 1f, 0.85f);
-
-            // 순서 토큰 배지 (orderIndex > 0인 태스크)
-            if (task.orderIndex > 0)
-            {
-                var badge = new GameObject("OrderBadge", typeof(RectTransform));
-                badge.transform.SetParent(item.transform, false);
-                var bRT = badge.GetComponent<RectTransform>();
-                bRT.anchorMin = bRT.anchorMax = new Vector2(0f, 1f);
-                bRT.pivot     = new Vector2(0f, 1f);
-                bRT.anchoredPosition = new Vector2(2f, -2f);
-                bRT.sizeDelta        = new Vector2(20f, 20f);
-                var bBG = badge.AddComponent<Image>();
-                bBG.color = new Color(1f, 0.75f, 0f, 0.95f);
-                bBG.raycastTarget = false;
-
-                var bNumGO = new GameObject("Num", typeof(RectTransform));
-                bNumGO.transform.SetParent(badge.transform, false);
-                var bNRT = bNumGO.GetComponent<RectTransform>();
-                bNRT.anchorMin = Vector2.zero;
-                bNRT.anchorMax = Vector2.one;
-                bNRT.offsetMin = bNRT.offsetMax = Vector2.zero;
-                var bTmp = bNumGO.AddComponent<TextMeshProUGUI>();
-                bTmp.text      = task.orderIndex.ToString();
-                bTmp.fontSize  = 12f;
-                bTmp.fontStyle = TMPro.FontStyles.Bold;
-                bTmp.alignment = TMPro.TextAlignmentOptions.Center;
-                bTmp.color     = Color.black;
-                bTmp.raycastTarget = false;
-            }
+                bg.color = new Color(0.10f, 0.12f, 0.18f, 0.95f);
         }
     }
 

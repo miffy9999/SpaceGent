@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 플레이어 1인당 1개씩 보유하는 통신 토큰.
@@ -102,9 +102,39 @@ public class CommunicationToken
         return RevealPosition.Lowest;
     }
 
+    /// <summary>
+    /// 데드존(Dead Zone) 통신: 카드를 공개하되 위치 토큰을 올리지 않는다.
+    /// 다른 플레이어는 어떤 위치인지 직관으로만 추측해야 한다.
+    /// </summary>
+    public bool TryRevealDeadZone()
+    {
+        if (isUsed) return false;
+
+        Card best = null;
+        foreach (Card c in owner.hand)
+        {
+            if (c.suit == Card.Suit.Rocket) continue;
+            if (best == null || c.value > best.value) best = c;
+        }
+        if (best == null) return false;
+
+        revealedCard   = best;
+        revealPosition = DeterminePosition(best);  // 내부 계산은 하지만 UI에 표시 안 함
+        isUsed         = true;
+        IsDeadZone     = true;
+
+        Debug.Log($"[CommToken:DeadZone] {owner.name} → {best.suit} {best.value} 공개 (위치 비공개)");
+        return true;
+    }
+
+    /// <summary>이 통신이 데드존 모드였는지 여부.</summary>
+    public bool IsDeadZone { get; private set; } = false;
+
     public void Reset()
     {
         isUsed       = false;
         revealedCard = null;
+        IsDeadZone   = false;
     }
 }
+
