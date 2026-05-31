@@ -110,3 +110,7 @@ venv/
 .venv/
 .env
 .env.*
+
+# 학습 산출물 (tfevents·체크포인트·시각화 PNG/CSV) — visualize_training.py로 로컬 생성
+Result/
+results/
