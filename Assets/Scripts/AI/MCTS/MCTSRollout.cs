@@ -34,7 +34,13 @@ public static class MCTSRollout
     }
 
     // ---------------------------------------------------------------
-    // 현재 상태에서 카드 결정 (시뮬레이션 전용 정책)
+    // 현재 상태에서 카드 결정 (시뮬레이션 전용 정책 — 다중 태스크 협력)
+    //  규칙:
+    //   1) 이번 트릭에 누군가의 미완료 목표 카드가 깔림
+    //        - 내가 그 owner → 이기러 감(Claim)
+    //        - 아니면        → 안 이김(Safest)  ← 가로채기 방지
+    //   2) 깔린 목표 없음 → 내 목표 카드는 보존하고 가장 안 이길 카드(Safest)
+    //        (목표는 내가 이길 수 있는 트릭에서 쓰려고 아껴 둠)
     // ---------------------------------------------------------------
     public static int Decide(MCTSState s)
     {
@@ -42,50 +48,33 @@ public static class MCTSRollout
         if (legal.Count == 0) return -1;
         if (legal.Count == 1) return legal[0];
 
-        bool isAssignee = (s.currentPlayer == s.assigneeIdx);
-        Card target = s.targetCard;
+        int cur = s.currentPlayer;
+        var hand = s.hands[cur];
 
-        // ── WinSpecificCard 약식 롤아웃 정책 ─────────────────────────────
-        //  목표 카드 X가 든 트릭을 담당자가 이겨야 함.
-        if (target != null)
+        // 1) 테이블에 미완료 목표가 깔려 있으면 owner만 이기러 간다
+        int ownerOnTable = s.OwnerOfTargetOnTable();
+        if (ownerOnTable >= 0)
+            return (cur == ownerOnTable) ? ClaimingIndex(s, legal) : SafestIndex(s, legal);
+
+        // 2) 내가 든 미완료 목표(들) — 흘리지 않도록 후보에서 제외하고 Safest
+        var myTargets = new HashSet<Card>();
+        foreach (var t in s.PendingTargetsOf(cur)) myTargets.Add(t);
+
+        if (myTargets.Count > 0)
         {
-            // 1) X가 이미 테이블에 깔림 → 담당자는 무조건 획득, 도우미는 절대 안 이김
-            if (s.cardsOnTable.Contains(target))
-                return isAssignee ? ClaimingIndex(s, legal) : SafestIndex(s, legal);
-
-            var hand = s.hands[s.currentPlayer];
-            int targetIdx = LegalIndexOf(hand, legal, target);
-
-            // 2) 도우미가 X를 보유 → 담당자가 현재 이기는 중일 때만 X를 흘려줌(release)
-            if (!isAssignee && targetIdx >= 0)
-            {
-                if (s.cardsOnTable.Count > 0 && s.CurrentWinnerPlayer() == s.assigneeIdx)
-                    return targetIdx;                       // 담당자 트릭에 X 투입 → 완료
-                int se = SafestExcluding(s, legal, target); // 아니면 X 보존
-                if (se >= 0) return se;
-                return targetIdx;                           // X밖에 못 낼 때(강제)
-            }
+            int se = SafestExcluding(s, legal, myTargets);
+            if (se >= 0) return se;
         }
-
-        // 3) 기본: 담당자는 카드 보존(낮은 카드), 도우미도 양보
         return SafestIndex(s, legal);
     }
 
-    // 합법 액션 중 특정 카드의 인덱스 (없으면 -1)
-    private static int LegalIndexOf(List<Card> hand, List<int> legal, Card card)
-    {
-        foreach (var i in legal)
-            if (hand[i].Equals(card)) return i;
-        return -1;
-    }
-
-    // SafestIndex와 동일하되 특정 카드(제외 대상)는 후보에서 뺀다.
-    private static int SafestExcluding(MCTSState s, List<int> legal, Card exclude)
+    // SafestIndex와 동일하되 제외 집합의 카드는 후보에서 뺀다.
+    private static int SafestExcluding(MCTSState s, List<int> legal, HashSet<Card> exclude)
     {
         var hand = s.hands[s.currentPlayer];
         var filtered = new List<int>();
         foreach (var i in legal)
-            if (!hand[i].Equals(exclude)) filtered.Add(i);
+            if (!exclude.Contains(hand[i])) filtered.Add(i);
         if (filtered.Count == 0) return -1;
         return SafestIndex(s, filtered);
     }

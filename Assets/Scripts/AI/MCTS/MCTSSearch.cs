@@ -166,10 +166,13 @@ public class MCTSContext
     public int[] trickWinCounts;
     public int firstTrickWinner;
     public int lastTrickWinner;                          // 보통 -1 (마지막 트릭 진행 중에만 set)
-    public int assigneeIdx;
-    public Card targetCard;          // 담당자가 이 카드가 든 트릭을 이겨야 함 (WinSpecificCard)
-    public bool taskCompleted;
-    public bool taskFailed;
+
+    // 다중 태스크 + 전역 규칙
+    public List<MctsTask>    tasks = new List<MctsTask>();
+    public GlobalMissionRule globalRule = GlobalMissionRule.None;
+    public int completedCount;       // 이미 완수된 태스크 수 (순서 토큰 판정 시작값)
+    public int rocketWinsMax;        // 이미 이긴 트릭의 로켓 최대값 (RocketsInOrder)
+
     public HashSet<Card.Suit>[] knownVoids;              // [playerCount] 각자 void suit
     public int[] handSizes;                              // 각 플레이어가 가질 카드 수
 
@@ -178,6 +181,9 @@ public class MCTSContext
     // ---------------------------------------------------------------
     public MCTSState BuildInitialState(List<Card>[] hands)
     {
+        var clonedTasks = new List<MctsTask>(tasks.Count);
+        foreach (var t in tasks) clonedTasks.Add(t.Clone());
+
         var s = new MCTSState
         {
             hands           = hands,
@@ -190,10 +196,11 @@ public class MCTSContext
             trickWinCounts  = (int[])trickWinCounts.Clone(),
             firstTrickWinner = firstTrickWinner,
             lastTrickWinner  = lastTrickWinner,
-            assigneeIdx     = assigneeIdx,
-            targetCard      = targetCard,
-            taskCompleted   = taskCompleted,
-            taskFailed      = taskFailed,
+            tasks           = clonedTasks,
+            globalRule      = globalRule,
+            completedCount  = completedCount,
+            rocketWinsMax   = rocketWinsMax,
+            selfIdx         = selfIdx,
         };
         return s;
     }

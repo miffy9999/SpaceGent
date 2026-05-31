@@ -908,7 +908,6 @@ public class MissionManager : MonoBehaviour
     // ─────────────────────────────────────────────────────────────
     public MCTSContext BuildMCTSContext(CrewAgent self)
     {
-        if (Phase != TrainingMode.Phase1_CoopSingle) return null;
         var tm = GameManager.Instance.trickManager;
         if (tm == null) return null;
         var players = GameManager.Instance.players;
@@ -932,6 +931,25 @@ public class MissionManager : MonoBehaviour
                 if (tm.IsKnownVoid(players[i], s)) voids[i].Add(s);
         }
 
+        // 다중 태스크 → MctsTask 변환 (미완료 태스크만 의미 있음)
+        var mctsTasks = new List<MctsTask>();
+        int doneCount = 0;
+        foreach (var t in tasks)
+        {
+            if (t.targetCard == null) continue;
+            int owner = players.IndexOf(t.assignedTo);
+            if (owner < 0) continue;
+            mctsTasks.Add(new MctsTask
+            {
+                ownerIdx  = owner,
+                target    = t.targetCard,
+                order     = t.orderToken,
+                completed = t.isCompleted,
+                failed    = t.isFailed,
+            });
+            if (t.isCompleted) doneCount++;
+        }
+
         return new MCTSContext
         {
             selfIdx                = players.IndexOf(self),
@@ -947,10 +965,10 @@ public class MissionManager : MonoBehaviour
             trickWinCounts         = BuildTrickWinCountsArray(players),
             firstTrickWinner       = firstTrickWinner != null ? players.IndexOf(firstTrickWinner) : -1,
             lastTrickWinner        = lastTrickWinner  != null ? players.IndexOf(lastTrickWinner)  : -1,
-            assigneeIdx            = phase1Assignee != null ? players.IndexOf(phase1Assignee) : -1,
-            targetCard             = tasks.Count > 0 ? tasks[0].targetCard : null,
-            taskCompleted          = tasks.Count > 0 && tasks[0].isCompleted,
-            taskFailed             = tasks.Count > 0 && tasks[0].isFailed,
+            tasks                  = mctsTasks,
+            globalRule             = currentMission != null ? currentMission.globalRule : GlobalMissionRule.None,
+            completedCount         = doneCount,
+            rocketWinsMax          = 0,
             knownVoids             = voids,
             handSizes              = handSizes,
         };
