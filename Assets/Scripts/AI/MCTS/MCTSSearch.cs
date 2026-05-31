@@ -53,7 +53,8 @@ public static class MCTSSearch
             var hands = Determinizer.Sample(
                 ctx.selfHand, ctx.selfIdx,
                 ctx.playedCards, ctx.tableCards,
-                ctx.knownVoids, ctx.handSizes, rng);
+                ctx.knownVoids, ctx.handSizes, rng,
+                ctx.commReveals);
 
             // 초기 상태 구성
             var rootState = ctx.BuildInitialState(hands);
@@ -175,6 +176,7 @@ public class MCTSContext
 
     public HashSet<Card.Suit>[] knownVoids;              // [playerCount] 각자 void suit
     public int[] handSizes;                              // 각 플레이어가 가질 카드 수
+    public List<CommReveal> commReveals;                 // 통신으로 공개된 카드/위치 (신념)
 
     // ---------------------------------------------------------------
     // determinization 결과 hands로 초기 MCTSState 구성
@@ -204,4 +206,17 @@ public class MCTSContext
         };
         return s;
     }
+}
+
+// =====================================================================
+//  CommReveal — 통신 토큰으로 공개된 정보 (PIMC 신념 제약).
+//   playerIdx 가 card 를 보유함이 공개됨.
+//   hasPosition=true 면 그 무늬에서의 위치(최고/유일/최저)도 공개(데드존은 false).
+// =====================================================================
+public class CommReveal
+{
+    public int  playerIdx;
+    public Card card;
+    public CommunicationToken.RevealPosition position;
+    public bool hasPosition;   // 데드존이면 false (정확한 카드만 알고 위치는 모름)
 }

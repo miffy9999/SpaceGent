@@ -21,10 +21,19 @@ public static class Determinizer
     private const int MaxRetries = 100;
 
     // ---------------------------------------------------------------
+    // 통신 위치 제약: 특정 플레이어가 특정 무늬에 가질 수 있는 값 범위.
+    //   maxV : 이 값 초과의 같은 무늬 카드 보유 불가 (최고값 공개)
+    //   minV : 이 값 미만의 같은 무늬 카드 보유 불가 (최저값 공개)
+    //   forbidAll : 그 무늬 카드를 더 가질 수 없음 (유일 공개 — 공개 카드 1장뿐)
+    // ---------------------------------------------------------------
+    private class SuitLimit { public int maxV = int.MaxValue; public int minV = int.MinValue; public bool forbidAll; }
+
+    // ---------------------------------------------------------------
     // Sample: self의 시점에서 가능한 손패 분포 1개 생성.
     //   knownVoids[i] = null이면 빈 집합으로 취급.
     //   handSizes[i] = 분배 시점에 player i가 가져야 할 카드 수.
     //   selfIdx = self 플레이어 (이미 손패 정확함).
+    //   commReveals = 통신으로 공개된 카드/위치 (신념 제약).
     // ---------------------------------------------------------------
     public static List<Card>[] Sample(
         List<Card> selfHand,
@@ -33,7 +42,8 @@ public static class Determinizer
         List<Card> tableCards,
         HashSet<Card.Suit>[] knownVoids,
         int[] handSizes,
-        System.Random rng)
+        System.Random rng,
+        List<CommReveal> commReveals = null)
     {
         int playerCount = handSizes.Length;
         var hands = new List<Card>[playerCount];
@@ -45,10 +55,48 @@ public static class Determinizer
         // unplayed pool 구성
         var unplayed = BuildUnplayedPool(selfHand, playedCards, tableCards);
 
+        // 통신 공개 → 강제 배치 카드 + 위치 제약 구성
+        //   이미 플레이된(테이블/누적) 카드는 제외. self가 공개한 카드는 self가 정확하므로 무시.
+        var forced = new Dictionary<int, List<Card>>();          // playerIdx → 강제 보유 카드
+        var limits = new Dictionary<int, Dictionary<Card.Suit, SuitLimit>>();
+        if (commReveals != null)
+        {
+            var taken = BuildTakenSet(selfHand, playedCards, tableCards);
+            foreach (var r in commReveals)
+            {
+                if (r == null || r.card == null) continue;
+                if (r.playerIdx == selfIdx) continue;            // self는 정확
+                if (r.playerIdx < 0 || r.playerIdx >= playerCount) continue;
+                if (taken.Contains(r.card)) continue;            // 이미 플레이됨 → 제약 무의미
+
+                // 강제 보유 카드 (unplayed pool에 있을 때만)
+                if (unplayed.Remove(r.card))
+                {
+                    if (!forced.TryGetValue(r.playerIdx, out var list))
+                        forced[r.playerIdx] = list = new List<Card>();
+                    list.Add(r.card);
+                }
+
+                // 위치 제약 (데드존이면 위치 정보 없음)
+                if (!r.hasPosition) continue;
+                if (!limits.TryGetValue(r.playerIdx, out var bySuit))
+                    limits[r.playerIdx] = bySuit = new Dictionary<Card.Suit, SuitLimit>();
+                if (!bySuit.TryGetValue(r.card.suit, out var lim))
+                    bySuit[r.card.suit] = lim = new SuitLimit();
+                switch (r.position)
+                {
+                    case CommunicationToken.RevealPosition.Highest: lim.maxV = r.card.value; break;
+                    case CommunicationToken.RevealPosition.Lowest:  lim.minV = r.card.value; break;
+                    case CommunicationToken.RevealPosition.Only:    lim.forbidAll = true;    break;
+                }
+            }
+        }
+
         // 분배 시도
         for (int retry = 0; retry < MaxRetries; retry++)
         {
-            if (TryDistribute(unplayed, hands, selfIdx, handSizes, knownVoids, rng))
+            ApplyForced(hands, forced);
+            if (TryDistribute(unplayed, hands, selfIdx, handSizes, knownVoids, limits, rng))
                 return hands;
 
             // 실패: hands 리셋 (self만 유지) 후 재시도
@@ -56,12 +104,32 @@ public static class Determinizer
                 if (i != selfIdx) hands[i].Clear();
         }
 
-        // MaxRetries 초과 시: void 제약 완화하고 1번 더 시도 (fail-soft)
-        Debug.LogWarning("[Determinizer] void 제약 충족 분배 실패 — void 무시하고 분배");
+        // MaxRetries 초과 시: 위치/void 제약 완화하고 1번 더 시도 (fail-soft)
+        Debug.LogWarning("[Determinizer] 제약 충족 분배 실패 — 통신/void 제약 완화하고 분배");
         for (int i = 0; i < playerCount; i++)
             if (i != selfIdx) hands[i].Clear();
+        ApplyForced(hands, forced);   // 강제 배치는 유지 (정확 정보)
         DistributeIgnoringVoids(unplayed, hands, selfIdx, handSizes, rng);
         return hands;
+    }
+
+    // 강제 보유 카드를 해당 플레이어 손에 배치 (재시도마다 호출 전 hands는 self만 남김)
+    private static void ApplyForced(List<Card>[] hands, Dictionary<int, List<Card>> forced)
+    {
+        if (forced == null) return;
+        foreach (var kv in forced)
+            foreach (var c in kv.Value)
+                if (!hands[kv.Key].Contains(c)) hands[kv.Key].Add(c);
+    }
+
+    private static HashSet<Card> BuildTakenSet(
+        List<Card> selfHand, HashSet<Card> playedCards, List<Card> tableCards)
+    {
+        var taken = new HashSet<Card>();
+        foreach (var c in selfHand) taken.Add(c);
+        if (playedCards != null) foreach (var c in playedCards) taken.Add(c);
+        if (tableCards  != null) foreach (var c in tableCards)  taken.Add(c);
+        return taken;
     }
 
     // ---------------------------------------------------------------
@@ -70,10 +138,7 @@ public static class Determinizer
     private static List<Card> BuildUnplayedPool(
         List<Card> selfHand, HashSet<Card> playedCards, List<Card> tableCards)
     {
-        var taken = new HashSet<Card>();
-        foreach (var c in selfHand) taken.Add(c);
-        if (playedCards != null) foreach (var c in playedCards) taken.Add(c);
-        if (tableCards  != null) foreach (var c in tableCards)  taken.Add(c);
+        var taken = BuildTakenSet(selfHand, playedCards, tableCards);
 
         var unplayed = new List<Card>(40);
         for (int s = 0; s < 4; s++)
@@ -98,6 +163,7 @@ public static class Determinizer
     private static bool TryDistribute(
         List<Card> unplayed, List<Card>[] hands,
         int selfIdx, int[] handSizes, HashSet<Card.Suit>[] knownVoids,
+        Dictionary<int, Dictionary<Card.Suit, SuitLimit>> limits,
         System.Random rng)
     {
         // 순서 shuffle
@@ -113,6 +179,7 @@ public static class Determinizer
                 if (hands[p].Count >= handSizes[p]) continue;     // 이미 full
                 if (knownVoids != null && knownVoids[p] != null
                     && knownVoids[p].Contains(card.suit)) continue; // void
+                if (ViolatesLimit(limits, p, card)) continue;       // 통신 위치 제약
                 candidates.Add(p);
             }
             if (candidates.Count == 0) return false;
@@ -124,6 +191,19 @@ public static class Determinizer
         for (int p = 0; p < hands.Length; p++)
             if (hands[p].Count != handSizes[p]) return false;
         return true;
+    }
+
+    // 통신 위치 제약 위반 여부 (card를 player p에게 줄 수 없는가)
+    private static bool ViolatesLimit(
+        Dictionary<int, Dictionary<Card.Suit, SuitLimit>> limits, int p, Card card)
+    {
+        if (limits == null) return false;
+        if (!limits.TryGetValue(p, out var bySuit)) return false;
+        if (!bySuit.TryGetValue(card.suit, out var lim)) return false;
+        if (lim.forbidAll) return true;                 // 유일 → 그 무늬 추가 불가
+        if (card.value > lim.maxV) return true;         // 최고값 초과 불가
+        if (card.value < lim.minV) return true;         // 최저값 미만 불가
+        return false;
     }
 
     // ---------------------------------------------------------------

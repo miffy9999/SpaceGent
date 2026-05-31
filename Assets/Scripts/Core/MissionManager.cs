@@ -931,6 +931,25 @@ public class MissionManager : MonoBehaviour
                 if (tm.IsKnownVoid(players[i], s)) voids[i].Add(s);
         }
 
+        // 통신 공개 정보 수집 (신념 제약) — 사용된 통신 토큰의 공개 카드/위치
+        var commReveals = new List<CommReveal>();
+        var cm = GameManager.Instance.communicationManager;
+        if (cm != null)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                var tok = cm.GetCommToken(players[i]);
+                if (tok == null || !tok.isUsed || tok.revealedCard == null) continue;
+                commReveals.Add(new CommReveal
+                {
+                    playerIdx   = i,
+                    card        = tok.revealedCard,
+                    position    = tok.revealPosition,
+                    hasPosition = !tok.IsDeadZone,
+                });
+            }
+        }
+
         // 다중 태스크 → MctsTask 변환 (미완료 태스크만 의미 있음)
         var mctsTasks = new List<MctsTask>();
         int doneCount = 0;
@@ -971,6 +990,7 @@ public class MissionManager : MonoBehaviour
             rocketWinsMax          = 0,
             knownVoids             = voids,
             handSizes              = handSizes,
+            commReveals            = commReveals,
         };
     }
 
