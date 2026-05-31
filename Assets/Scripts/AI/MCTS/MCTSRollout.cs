@@ -56,7 +56,16 @@ public static class MCTSRollout
         if (ownerOnTable >= 0)
             return (cur == ownerOnTable) ? ClaimingIndex(s, legal) : SafestIndex(s, legal);
 
-        // 2) 내가 든 미완료 목표(들) — 흘리지 않도록 후보에서 제외하고 Safest
+        // 2) 동료가 지금 이기는 중이고 내가 그 동료의 목표를 들고 있으면 → 투입(완료)
+        //    단, 그 목표가 현재 최강을 안 이겨야(=동료가 계속 이김) 안전하다.
+        int releaseIdx = TryReleaseTeammateTarget(s, legal);
+        if (releaseIdx >= 0) return releaseIdx;
+
+        // 3) 내가 리드이고 내 목표가 "보장 승리"면 그 목표를 리드해 바로 완료를 노린다
+        int leadIdx = TryLeadOwnTargetIfWinning(s, legal);
+        if (leadIdx >= 0) return leadIdx;
+
+        // 4) 내가 든 미완료 목표(들) — 흘리지 않도록 후보에서 제외하고 Safest
         var myTargets = new HashSet<Card>();
         foreach (var t in s.PendingTargetsOf(cur)) myTargets.Add(t);
 
@@ -66,6 +75,81 @@ public static class MCTSRollout
             if (se >= 0) return se;
         }
         return SafestIndex(s, legal);
+    }
+
+    // 동료(현재 트릭 승자)의 미완료 목표를 내가 들고 있으면, 승자를 안 바꾸는 선에서 투입.
+    private static int TryReleaseTeammateTarget(MCTSState s, List<int> legal)
+    {
+        if (s.cardsOnTable.Count == 0) return -1;
+        int winner = s.CurrentWinnerPlayer();
+        if (winner < 0 || winner == s.currentPlayer) return -1;
+
+        var hand = s.hands[s.currentPlayer];
+
+        // 현재 테이블 최강 카드
+        Card best = s.cardsOnTable[0];
+        for (int i = 1; i < s.cardsOnTable.Count; i++)
+            if (s.Beats(s.cardsOnTable[i], best)) best = s.cardsOnTable[i];
+
+        foreach (var t in s.tasks)
+        {
+            if (t.completed || t.failed) continue;
+            if (t.ownerIdx != winner) continue;
+            foreach (int i in legal)
+                if (hand[i].Equals(t.target) && !s.Beats(hand[i], best))   // 승자 안 바뀜
+                    return i;
+        }
+        return -1;
+    }
+
+    // 리드 상황에서 내 목표 카드를 내면 반드시 이기는 경우(다른 손패 모두 알고 판정) → 그 목표 리드.
+    private static int TryLeadOwnTargetIfWinning(MCTSState s, List<int> legal)
+    {
+        if (s.cardsOnTable.Count != 0) return -1;   // 리드만
+        int cur = s.currentPlayer;
+        var hand = s.hands[cur];
+
+        foreach (var t in s.tasks)
+        {
+            if (t.completed || t.failed) continue;
+            if (t.ownerIdx != cur) continue;
+            foreach (int i in legal)
+                if (hand[i].Equals(t.target) && LeadGuaranteesWin(s, hand[i]))
+                    return i;
+        }
+        return -1;
+    }
+
+    // 결정화 상태(모든 손패 알려짐)에서 lead 카드를 내면 아무도 못 이기는가.
+    private static bool LeadGuaranteesWin(MCTSState s, Card lead)
+    {
+        int cur = s.currentPlayer;
+        for (int p = 0; p < s.hands.Length; p++)
+        {
+            if (p == cur) continue;
+            var h = s.hands[p];
+            if (lead.suit == Card.Suit.Rocket)
+            {
+                foreach (var c in h)
+                    if (c.suit == Card.Suit.Rocket && c.value > lead.value) return false;
+            }
+            else
+            {
+                bool hasLead = false;
+                foreach (var c in h) if (c.suit == lead.suit) { hasLead = true; break; }
+                if (hasLead)
+                {
+                    foreach (var c in h)
+                        if (c.suit == lead.suit && c.value > lead.value) return false;
+                }
+                else
+                {
+                    // 리드 슈트 없음 → 로켓으로 트럼프 가능
+                    foreach (var c in h) if (c.suit == Card.Suit.Rocket) return false;
+                }
+            }
+        }
+        return true;
     }
 
     // SafestIndex와 동일하되 제외 집합의 카드는 후보에서 뺀다.
