@@ -73,3 +73,30 @@ environment_parameters:
 
       - name: Stage4_4tasks
         value: 4
+
+  # ──────────────────────────────────────────────
+  # 특수 규칙 env 플래그 (Simulation 학습에서 켜면 합성 미션으로 적용 + 관측 노출).
+  #   MissionManager.BuildSyntheticMissionFromEnv()가 읽어 currentMission에 주입 →
+  #   enforce(CheckGlobalRule/통신/카드교환/순서토큰)·관측(특수규칙 32칸) 모두 동작.
+  #   기본 0 = 규칙 없음(순수 트릭+드래프트 베이스). 각 항목 fixed value 또는 curriculum 가능.
+  #
+  #   global_rule:          0 없음 / 1~9 = GlobalMissionRule
+  #                         (1 AllRocketsMustWin·2 NoNineWins·3 RocketOneWinsTwice·4 BalanceTricks·
+  #                          5 RocketsInOrder·6 CommanderFirstAndLast·7 OmegaOnLastTrick·
+  #                          8 OnePlayerFirstFourOnly·9 LeftOfPinkNineWinsAllPink)
+  #   order_token_mode:     0 없음 / 1 숫자(①②) / 2 Ω / 3 화살표(›››)
+  #   dead_zone:            1 = 통신 위치(최고/유일/최저) 비공개
+  #   comm_disrupt_until:   N = N번째 트릭 전까지 통신 금지 (⚡N)
+  #   no_comm_player:       1 = 특정인(사령관 왼쪽) 통신 불가 (M11)
+  #   card_pass_after_first:1 = 첫 트릭 후 카드 1장 전달 (M12)
+  #
+  #   ※ commander_decision/distribution은 드래프트 흐름 변경이라 미구현(관측만). 추후 통합.
+  #   예) 9못이김을 num_tasks와 별도 커리큘럼으로:
+  #       global_rule:
+  #         curriculum:
+  #           - name: off
+  #             completion_criteria: { measure: reward, behavior: CrewAgent, threshold: 0.8, min_lesson_length: 100 }
+  #             value: 0
+  #           - name: nine
+  #             value: 2
+  # ──────────────────────────────────────────────

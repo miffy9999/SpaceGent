@@ -443,7 +443,7 @@ public class CrewAgent : Agent
         }
 
         // 9. 특수 규칙 (16, 예약) — mission-level. Phase A엔 0, 커리큘럼에서 채움.
-        float[] sr = mm != null ? mm.GetSpecialRuleObs() : new float[MissionManager.SpecialRuleObsSize];
+        float[] sr = mm != null ? mm.GetSpecialRuleObs(this) : new float[MissionManager.SpecialRuleObsSize];
         foreach (float f in sr) sensor.AddObservation(f);
     }
 

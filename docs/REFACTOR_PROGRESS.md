@@ -121,3 +121,22 @@
 1. 학습 실행 검증(Stage1 num_tasks=1 → 점증). 통신 사용이 의미 있게 학습되는지(공개 후 동료 정책 변화) 관찰.
 2. Phase B: 특수규칙 obs 채우기 + enforce 구현(통신차단·데드존부터). `enable_order_tokens`로 순서토큰 단계 추가.
 3. Phase C: 사령관 결정/분배 드래프트 변형.
+
+---
+
+## 통합 (`integration` 브랜치) — 팀원 `space-crew-env` 베이스 + 내 기여 얹기
+
+> 베이스 = 팀원 브랜치(50미션 DB·`GlobalMissionRule`/`MissionTaskRule`·playMode·텍스트태스크·통신규칙 enforce).
+> 규칙 표현/enforce는 **팀원 구현을 정본으로 채택**하고, 내 차별 기여만 얹음.
+
+**얹은 것:**
+- **`GetSpecialRuleObs(viewer)` 채움** (팀원은 stub=0이었음) — `currentMission`(globalRule·taskRule·순서토큰) + `CommunicationManager`(데드존·통신차단·통신금지)를 32칸 관측으로 노출. **에이전트가 활성 규칙을 인지 → 학습 가능.** CrewAgent 호출 `GetSpecialRuleObs(this)`.
+- **Simulation 합성 미션**(`BuildSyntheticMissionFromEnv`) — 학습 모드에서 env 플래그(`global_rule`·`order_token_mode`·`dead_zone`·`comm_disrupt_until`·`no_comm_player`·`card_pass_after_first`)로 특수규칙을 켜면 합성 `currentMission`에 주입 → 팀원 enforce·내 관측이 그대로 작동. 플래그 없으면 null(기존 num_tasks 베이스 동일).
+- **config**: 위 env 플래그 문서화(커리큘럼/fixed 예시).
+
+**팀원 정본으로 둔 것(중복 제거):** globalRule enforce(`CheckGlobalRule`), 통신 규칙(`CommunicationManager`), 카드교환·순서토큰 enforce, 50미션 DB, playMode/UI/씬.
+
+**합의/확인 필요(팀원과):**
+- 데드존 시 AI 통신이 `UseCommToken`(위치 공개) 경로라 `UseCommTokenDeadZone`로 라우팅 필요(현재 위치가 노출될 수 있음) — 팀원 도메인.
+- `commander_decision/distribution`은 드래프트 흐름 미구현(관측만). 필요 시 별도 구현.
+- m46=`LeftOfPinkNineWinsAllPink`(빨강=Pink) 해석 일치 확인.

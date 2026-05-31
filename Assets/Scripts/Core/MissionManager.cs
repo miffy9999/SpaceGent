@@ -130,10 +130,11 @@ public class MissionManager : MonoBehaviour
         }
         else
         {
-            // 학습(커리큘럼): task 개수를 1개부터 점차 늘린다 (env: num_tasks)
+            // 학습(커리큘럼): task 개수 num_tasks. 특수규칙 env 플래그가 있으면 합성 미션으로 켠다
+            //   (플래그가 하나도 없으면 null → 순수 트릭+드래프트 베이스, 기존 동작 그대로)
             taskCount = Mathf.RoundToInt(ep.GetWithDefault("num_tasks", 1f));
-            currentMission = null;
             currentMaxDifficulty = taskCount;
+            currentMission = BuildSyntheticMissionFromEnv(ep, Mathf.Clamp(taskCount, 0, MaxPoolSize));
         }
         taskCount = Mathf.Clamp(taskCount, 0, MaxPoolSize);
 
@@ -203,6 +204,47 @@ public class MissionManager : MonoBehaviour
             deadZone:          m.hasDeadZone,
             disruptionTrick:   m.commDisruptionTrick,
             onePlayerNoComm:   m.HasTaskRule(MissionTaskRule.OnePlayerNoComm));
+    }
+
+    // [커리큘럼] Simulation 학습에서 env 플래그로 특수규칙을 켜기 위한 합성 미션.
+    //   enforce(CheckGlobalRule / 통신 / 카드교환 / 순서토큰)는 팀원 구현을 그대로 사용.
+    //   규칙 플래그가 하나도 없으면 null → 순수 트릭+드래프트 베이스(기존 동작).
+    //   ※ commander_decision/distribution은 팀원 드래프트가 아직 미구현이라 여기선 제외(관측만 가능).
+    private Mission BuildSyntheticMissionFromEnv(EnvironmentParameters ep, int taskCount)
+    {
+        int  gr       = Mathf.RoundToInt(ep.GetWithDefault("global_rule", 0f));   // 0=없음, 1~9=GlobalMissionRule
+        bool deadZone = ep.GetWithDefault("dead_zone", 0f) > 0.5f;
+        int  disrupt  = Mathf.RoundToInt(ep.GetWithDefault("comm_disrupt_until", 0f));
+        bool noComm   = ep.GetWithDefault("no_comm_player", 0f) > 0.5f;
+        bool cardExch = ep.GetWithDefault("card_pass_after_first", 0f) > 0.5f;
+        int  otMode   = Mathf.RoundToInt(ep.GetWithDefault("order_token_mode", 0f)); // 1숫자/2Ω/3화살표
+
+        bool any = (gr >= 1 && gr <= 9) || deadZone || disrupt > 0 || noComm || cardExch || otMode > 0;
+        if (!any) return null;
+
+        var m = new Mission { number = 0, id = "sim", totalTaskCount = taskCount, isSpecialMission = taskCount == 0 };
+        m.globalRule          = (gr >= 1 && gr <= 9) ? (GlobalMissionRule)gr : GlobalMissionRule.None;
+        m.hasDeadZone         = deadZone;
+        m.commDisruptionTrick = disrupt;
+        MissionTaskRule tr = MissionTaskRule.None;
+        if (deadZone) tr |= MissionTaskRule.DeadZone;
+        if (noComm)   tr |= MissionTaskRule.OnePlayerNoComm;
+        if (cardExch) tr |= MissionTaskRule.CardExchangeAfterFirst;
+        m.taskRule = tr;
+        m.orderTokensForTasks = BuildOrderTokens(otMode, taskCount);
+        return m;
+    }
+
+    // 순서 토큰 배열 생성 (mode: 1 숫자 N1.. / 2 Omega(마지막) / 3 화살표 Arrow1..)
+    private OrderToken[] BuildOrderTokens(int mode, int count)
+    {
+        if (mode <= 0 || count <= 0) return new OrderToken[0];
+        var arr = new OrderToken[count];
+        if (mode == 2) { arr[count - 1] = OrderToken.Omega; return arr; }
+        OrderToken baseTok = (mode == 3) ? OrderToken.Arrow1 : OrderToken.N1;
+        int max = (mode == 3) ? 4 : 5;
+        for (int i = 0; i < count && i < max; i++) arr[i] = (OrderToken)((int)baseTok + i);
+        return arr;
     }
 
     // ---------------------------------------------------------------
@@ -1044,19 +1086,52 @@ public class MissionManager : MonoBehaviour
     // ---------------------------------------------------------------
     public const int TaskObservationSize = 162;
 
-    // 특수 규칙 관찰 (32, 예약) — mission-level. Phase A엔 전부 0, Phase B/C에서 채움.
-    //   "미션마다 one-hot"이 아니라 메커니즘 카테고리 + 파라미터로 인코딩(미션 md 19종 수용).
-    //   계획 레이아웃:
-    //   통신:   [0]데드존 [1]통신차단 재개트릭(/10) [2]특정인 통신불가
-    //   드래프트:[3]사령관 결정 [4]사령관 분배 [5]순서토큰 이동/교환 허용
-    //   승리조건:[6]9 트릭불가 [7]로켓 승리불가 [8]2트릭차 금지 [9]로켓 오름차순
-    //           [10]사령관 첫·마지막 [11]첫·마지막만(로켓없이) [12]특정값 승리필요 [13]그 값(/9)
-    //           [14]로켓당 1트릭 [15]특정"1"카드 트릭승리 [16]특정 색 전담 [17]그 색(/4)
-    //           [18]첫N트릭 전담 [19]N(/10) [20]마지막트릭 전담
-    //   흐름:   [21]첫 트릭 후 카드 전달
-    //   [22..31] 예비
+    // 특수 규칙 관찰 (32) — 현재 미션(currentMission) + 통신 규칙(CommunicationManager)에서 채운다.
+    //   에이전트가 활성 규칙을 인지해야 학습 가능하므로, 미션 규칙을 관측에 노출한다.
+    //   레이아웃 (GetSpecialRuleObs와 일치):
+    //   통신:   [0]데드존 [1]통신차단 재개트릭(/10) [2]특정인 통신불가 활성 [3]viewer가 통신금지 대상
+    //   드래프트/기타: [4]사령관 결정 [5]사령관 분배 [6]순서토큰 이동 허용 [7]첫트릭후 카드교환 [8]순서토큰 존재
+    //   전역규칙 one-hot(GlobalMissionRule 1~9): [9]AllRocketsMustWin [10]NoNineWins [11]RocketOneWinsTwice
+    //     [12]BalanceTricks [13]RocketsInOrder [14]CommanderFirstAndLast [15]OmegaOnLastTrick
+    //     [16]OnePlayerFirstFourOnly [17]LeftOfPinkNineWinsAllPink
+    //   [18]전역규칙 활성(any)  [19..31] 예비
     public const int SpecialRuleObsSize = 32;
-    public float[] GetSpecialRuleObs() => new float[SpecialRuleObsSize];
+    public float[] GetSpecialRuleObs(CrewAgent viewer)
+    {
+        var o = new float[SpecialRuleObsSize];
+        var cm = GameManager.Instance.communicationManager;
+        var m  = currentMission;
+
+        // 통신 규칙 (CommunicationManager가 정본)
+        if (cm != null)
+        {
+            o[0] = cm.IsDeadZone ? 1f : 0f;
+            o[1] = Mathf.Clamp01(cm.CommDisruptionTrick / 10f);
+            o[2] = cm.NoCommPlayer != null ? 1f : 0f;
+            o[3] = (cm.NoCommPlayer != null && cm.NoCommPlayer == viewer) ? 1f : 0f;
+        }
+
+        // 미션 task 규칙 플래그
+        if (m != null)
+        {
+            o[4] = m.HasTaskRule(MissionTaskRule.CommanderDecision)      ? 1f : 0f;
+            o[5] = m.HasTaskRule(MissionTaskRule.CommanderDistribution)  ? 1f : 0f;
+            o[6] = m.HasTaskRule(MissionTaskRule.TokenTransferAllowed)   ? 1f : 0f;
+            o[7] = m.HasTaskRule(MissionTaskRule.CardExchangeAfterFirst) ? 1f : 0f;
+        }
+
+        // 순서 토큰 존재 여부
+        o[8] = tasks.Exists(t => t.orderToken != OrderToken.None) ? 1f : 0f;
+
+        // 전역 규칙 one-hot (1~9 → [9..17]) + 활성 플래그
+        int gr = m != null ? (int)m.globalRule : 0;
+        if (gr >= 1 && gr <= 9)
+        {
+            o[9 + (gr - 1)] = 1f;
+            o[18] = 1f;
+        }
+        return o;
+    }
 
     public float[] GetTaskObservationFor(CrewAgent viewer)
     {
