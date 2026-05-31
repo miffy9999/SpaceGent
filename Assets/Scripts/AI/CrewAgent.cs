@@ -113,13 +113,15 @@ public class CrewAgent : Agent
             var mm = MissionManager.Instance;
             if (mm != null)
             {
-                bool isAssignee = mm.IsPhase1Assignee(this);
-                if (isAssignee && IsMCTSAssigneeEnabled())
+                if (ShouldUseMCTS())
                 {
+                    // MCTS: 모든 AI(도우미 포함)가 PIMC 탐색으로 협력 플레이
                     idx = DecideWithMCTS(mm);
                 }
                 else
                 {
+                    // 규칙 기반: 태스크 보유자 → assignee 전략, 그 외 → helper 전략
+                    bool isAssignee = mm.IsPhase1Assignee(this);
                     idx = isAssignee
                         ? mm.HeuristicAssigneeCardIndex(this)
                         : mm.HeuristicHelperCardIndex(this);
@@ -141,10 +143,13 @@ public class CrewAgent : Agent
             d[0] = 0;
     }
 
-    // ── MCTS 진입점 (담당자만 호출) ────────────────────────────────
-    //   활성화 우선순위: Inspector override > env parameter > 기본 false
-    private bool IsMCTSAssigneeEnabled()
+    // ── MCTS 사용 여부 (모든 AI 공통) ──────────────────────────────
+    //   우선순위: GameManager.aiPolicy==MCTS > MissionManager override > env parameter
+    private bool ShouldUseMCTS()
     {
+        var gm = GameManager.Instance;
+        if (gm != null && gm.aiPolicy == GameManager.HeuristicPolicy.MCTS) return true;
+
         var mm = MissionManager.Instance;
         if (mm != null && mm.overrideMctsAssignee) return true;
 

@@ -26,6 +26,18 @@ public class GameManager : MonoBehaviour
     [Tooltip("Simulation: player[0]도 AI로 동작해 인간 선택 없이 빠르게 진행.\nHumanVsAI: player[0]이 인간 플레이어.")]
     public PlayMode playMode = PlayMode.HumanVsAI;
 
+    public enum HeuristicPolicy
+    {
+        RuleBased,    // 규칙 기반 휴리스틱 (HFSM)
+        MCTS,         // PIMC 몬테카를로 트리 탐색
+    }
+
+    [Header("AI 정책 (BehaviorType=HeuristicOnly 에이전트에 적용)")]
+    [Tooltip("RL 학습은 BehaviorType=Default + 트레이너가 구동(이 설정 무관).\n" +
+             "HeuristicOnly 에이전트는 이 정책으로 카드를 결정한다.\n" +
+             "MCTS: 모든 AI(도우미 포함)가 PIMC 탐색으로 협력 플레이.")]
+    public HeuristicPolicy aiPolicy = HeuristicPolicy.RuleBased;
+
     // 인간 플레이어가 실제로 활성인지 (Simulation·배치모드면 false)
     public bool HasInteractiveHuman =>
         playMode == PlayMode.HumanVsAI && !Application.isBatchMode;
