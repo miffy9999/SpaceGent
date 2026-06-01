@@ -2,30 +2,36 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // =====================================================================
-//  MCTSSearch — PIMC (Perfect Information Monte Carlo) 메인 알고리즘.
+//  MCTSSearch — SO-ISMCTS (Single-Observer Information Set MCTS).
 // ---------------------------------------------------------------------
-//  Phase 1 단순 구조:
-//    1. determinization N개 샘플링
-//    2. 각 샘플마다 (budget / N) iterations 의 MCTS
-//    3. action별 누적 visit/reward 합산
-//    4. 가장 많이 방문된 액션 반환
+//  Cowling et al. 2012. 기존 앙상블 PIMC(결정화별 독립 트리)의 한계
+//  (얕은 트리, strategy fusion, budget 포화)를 극복:
+//    - 트리를 하나로 공유, 매 iteration마다 결정화를 새로 샘플
+//    - 엣지는 카드(액션) 기준 → 결정화가 달라도 일관
+//    - availability-aware UCB: 그 수가 "합법이었던 횟수"로 탐색항 보정
+//    - budget 전체가 한 트리에 모여 깊게 탐색 → budget이 실제로 효과
 //
-//  표준 4단계 MCTS:
-//    Selection (UCB1) → Expansion → Simulation (Rollout) → Backpropagation
-//
-//  Phase 1 단순화:
-//    - 시뮬레이션은 MCTSRollout 사용
-//    - tree-level entropy/PUCT 없음 (순수 UCB1)
-//    - 정해진 iteration budget (시간 대신)
+//  4단계: Selection(avail-UCB) → Expansion → Simulation(Rollout) → Backprop
 // =====================================================================
 public static class MCTSSearch
 {
-    public const float DefaultExplorationC = 1.41f;   // sqrt(2)
-    public const int   DefaultDeterminizations = 10;  // 샘플 분포 수
-    public const int   DefaultBudget = 500;           // 총 iteration 수
+    public const float DefaultExplorationC = 0.7f;    // 보상이 [0,1]이라 sqrt2보다 작게
+    public const int   DefaultDeterminizations = 10;
+    public const int   DefaultBudget = 1000;
+
+    // ── ISMCTS 노드: 카드(int 키) 기준 자식 ─────────────────────────
+    private class IsNode
+    {
+        public Dictionary<int, IsNode> children = new Dictionary<int, IsNode>();
+        public int   visits;
+        public float reward;     // 누적 보상 (협력: 전원 동일)
+        public int   avail;      // 이 수가 합법이었던 횟수 (availability)
+    }
+
+    private static int Key(Card c) => (int)c.suit * 100 + c.value;
 
     // ---------------------------------------------------------------
-    // 진입점: 현재 게임 상태에서 카드 인덱스 결정 (self의 손패 인덱스)
+    // 진입점: self 손패 인덱스 반환 (CrewAgent가 카드 인덱스로 사용)
     // ---------------------------------------------------------------
     public static int ChooseCard(MCTSContext ctx, int budget = DefaultBudget,
                                   int determinizations = DefaultDeterminizations,
@@ -35,116 +41,104 @@ public static class MCTSSearch
         if (ctx.legalActionsInSelfHand == null || ctx.legalActionsInSelfHand.Count == 0) return -1;
         if (ctx.legalActionsInSelfHand.Count == 1) return ctx.legalActionsInSelfHand[0];
 
-        // action별 visit/reward 누적 (다중 determinization 평균)
-        var actionVisits = new Dictionary<int, int>();
-        var actionReward = new Dictionary<int, float>();
-        foreach (var a in ctx.legalActionsInSelfHand)
+        var rng  = new System.Random();
+        var root = new IsNode();
+
+        // 결정화 비용 절감: dets개 표본을 미리 뽑아 iteration마다 순환 사용
+        //   (트리는 하나로 공유 — 핵심 이점 유지. 매 iter 새 백트래킹 비용 회피)
+        int detCount = Mathf.Max(1, determinizations);
+        var pool = new List<Card>[detCount][];
+        for (int d = 0; d < detCount; d++)
+            pool[d] = Determinizer.Sample(
+                ctx.selfHand, ctx.selfIdx, ctx.playedCards, ctx.tableCards,
+                ctx.knownVoids, ctx.handSizes, rng, ctx.commReveals);
+
+        for (int it = 0; it < budget; it++)
         {
-            actionVisits[a] = 0;
-            actionReward[a] = 0f;
+            var hands = pool[it % detCount];
+            var state = ctx.BuildInitialStateCloningHands(hands);
+            Iterate(root, state, explorationC, rng);
         }
 
-        int iterationsPerDeterminization = Mathf.Max(1, budget / Mathf.Max(1, determinizations));
-        var rng = new System.Random();
-
-        for (int d = 0; d < determinizations; d++)
-        {
-            // 새로운 손패 분포 샘플링
-            var hands = Determinizer.Sample(
-                ctx.selfHand, ctx.selfIdx,
-                ctx.playedCards, ctx.tableCards,
-                ctx.knownVoids, ctx.handSizes, rng,
-                ctx.commReveals);
-
-            // 초기 상태 구성
-            var rootState = ctx.BuildInitialState(hands);
-
-            // MCTS 트리 탐색
-            var root = new MCTSNode(null, -1, -1, rootState.LegalActions());
-            for (int it = 0; it < iterationsPerDeterminization; it++)
-            {
-                Iterate(root, rootState, explorationC);
-            }
-
-            // 이 determinization의 결과를 누적
-            foreach (var child in root.children)
-            {
-                int act = child.actionFromParent;
-                if (!actionVisits.ContainsKey(act)) continue;
-                actionVisits[act] += child.visits;
-                actionReward[act] += child.totalReward;
-            }
-        }
-
-        // visit 가장 많은 액션
-        int bestAction = -1;
-        int bestVisits = -1;
+        // 루트에서 가장 많이 방문된 카드 선택 → self 손패 인덱스로 매핑
+        int bestKey = -1, bestVisits = -1;
         float bestMean = float.NegativeInfinity;
-        foreach (var kv in actionVisits)
+        foreach (var kv in root.children)
         {
-            // 1순위: visits, 2순위: mean reward (tiebreak)
-            int v = kv.Value;
-            float mean = v > 0 ? actionReward[kv.Key] / v : 0f;
+            int v = kv.Value.visits;
+            float mean = v > 0 ? kv.Value.reward / v : 0f;
             if (v > bestVisits || (v == bestVisits && mean > bestMean))
-            {
-                bestVisits = v;
-                bestMean = mean;
-                bestAction = kv.Key;
-            }
+            { bestVisits = v; bestMean = mean; bestKey = kv.Key; }
         }
 
-        // 유효성 검증: bestAction이 self.legalActions에 있어야 함
-        if (bestAction < 0 || !ctx.legalActionsInSelfHand.Contains(bestAction))
+        if (bestKey >= 0)
         {
-            // 폴백: 첫 합법 액션
-            bestAction = ctx.legalActionsInSelfHand[0];
+            // bestKey에 해당하는 self 손패의 합법 인덱스 찾기
+            foreach (int idx in ctx.legalActionsInSelfHand)
+                if (idx >= 0 && idx < ctx.selfHand.Count && Key(ctx.selfHand[idx]) == bestKey)
+                    return idx;
         }
-        return bestAction;
+        return ctx.legalActionsInSelfHand[0];   // 폴백
     }
 
     // ---------------------------------------------------------------
-    // 1 iteration: Selection → Expansion → Simulation → Backprop
+    // 1 iteration (SO-ISMCTS)
     // ---------------------------------------------------------------
-    private static void Iterate(MCTSNode root, MCTSState rootState, float c)
+    private static void Iterate(IsNode root, MCTSState state, float c, System.Random rng)
     {
+        var path = new List<IsNode> { root };
         var node = root;
-        var state = rootState.Clone();
 
-        // ── Selection: 완전 확장 + 비 terminal 경로 ──────────────────
-        while (node.IsFullyExpanded() && !state.IsTerminal() && node.children.Count > 0)
+        while (!state.IsTerminal())
         {
-            node = node.SelectChildUCB(c);
-            state.ApplyAction(node.actionFromParent);
+            var legal = state.LegalMoveCards();
+            if (legal.Count == 0) break;
+
+            // 이 노드를 지나가므로, 합법인 기존 자식들의 availability 증가
+            foreach (var mv in legal)
+                if (node.children.TryGetValue(Key(mv), out var ch)) ch.avail++;
+
+            // 미확장 합법 수 수집
+            Card expand = null;
+            foreach (var mv in legal)
+                if (!node.children.ContainsKey(Key(mv))) { expand = mv; break; }
+
+            if (expand != null)
+            {
+                // Expansion: 미확장 수 하나 추가 (여러 개면 랜덤)
+                var untried = new List<Card>();
+                foreach (var mv in legal)
+                    if (!node.children.ContainsKey(Key(mv))) untried.Add(mv);
+                expand = untried[rng.Next(untried.Count)];
+
+                var child = new IsNode { avail = 1 };
+                node.children[Key(expand)] = child;
+                state.ApplyCard(expand);
+                node = child; path.Add(node);
+                break;   // 확장 후 시뮬레이션으로
+            }
+
+            // Selection: availability-aware UCB
+            Card best = legal[0];
+            float bestScore = float.NegativeInfinity;
+            foreach (var mv in legal)
+            {
+                var ch = node.children[Key(mv)];
+                float exploit = ch.visits > 0 ? ch.reward / ch.visits : 0f;
+                float explore = c * Mathf.Sqrt(Mathf.Log(Mathf.Max(1, ch.avail)) / Mathf.Max(1, ch.visits));
+                float score = exploit + explore;
+                if (score > bestScore) { bestScore = score; best = mv; }
+            }
+            state.ApplyCard(best);
+            node = node.children[Key(best)];
+            path.Add(node);
         }
 
-        // ── Expansion: 미확장 액션 하나 추가 ─────────────────────────
-        if (!state.IsTerminal() && node.untriedActions.Count > 0)
-        {
-            int randIdx = Random.Range(0, node.untriedActions.Count);
-            int action = node.untriedActions[randIdx];
-            node.untriedActions.RemoveAt(randIdx);
+        // Simulation
+        float reward = state.IsTerminal() ? state.Reward() : MCTSRollout.Rollout(state);
 
-            int playerBefore = state.currentPlayer;
-            state.ApplyAction(action);
-
-            var child = new MCTSNode(node, action, playerBefore, state.LegalActions());
-            node.children.Add(child);
-            node = child;
-        }
-
-        // ── Simulation: rollout으로 terminal까지 ────────────────────
-        float reward;
-        if (state.IsTerminal())
-        {
-            reward = state.Reward();
-        }
-        else
-        {
-            reward = MCTSRollout.Rollout(state);
-        }
-
-        // ── Backprop ────────────────────────────────────────────────
-        node.Backpropagate(reward);
+        // Backprop
+        foreach (var n in path) { n.visits++; n.reward += reward; }
     }
 }
 
@@ -205,6 +199,15 @@ public class MCTSContext
             selfIdx         = selfIdx,
         };
         return s;
+    }
+
+    // 풀의 손패를 재사용하므로(매 iteration 시뮬이 RemoveAt로 변형) 깊은 복제본으로 상태 구성.
+    public MCTSState BuildInitialStateCloningHands(List<Card>[] sourceHands)
+    {
+        var cloned = new List<Card>[sourceHands.Length];
+        for (int i = 0; i < sourceHands.Length; i++)
+            cloned[i] = new List<Card>(sourceHands[i]);
+        return BuildInitialState(cloned);
     }
 }
 

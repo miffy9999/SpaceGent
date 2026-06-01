@@ -111,6 +111,27 @@ public class MCTSState
         return legal;
     }
 
+    // 합법 수(카드 단위) — ISMCTS는 손패 인덱스 대신 카드로 트리를 키운다.
+    public List<Card> LegalMoveCards()
+    {
+        var idxs = LegalActions();
+        var cards = new List<Card>(idxs.Count);
+        var hand = hands[currentPlayer];
+        foreach (int i in idxs) cards.Add(hand[i]);
+        return cards;
+    }
+
+    // 카드로 액션 적용 (현재 플레이어 손에서 해당 카드를 찾아 ApplyAction).
+    public void ApplyCard(Card c)
+    {
+        var hand = hands[currentPlayer];
+        for (int i = 0; i < hand.Count; i++)
+            if (hand[i].Equals(c)) { ApplyAction(i); return; }
+        // 안전망: 못 찾으면(이론상 불가) 첫 합법 수
+        var legal = LegalActions();
+        if (legal.Count > 0) ApplyAction(legal[0]);
+    }
+
     // ---------------------------------------------------------------
     // 액션 적용 (in-place)
     // ---------------------------------------------------------------
