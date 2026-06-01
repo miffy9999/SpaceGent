@@ -556,7 +556,8 @@ public class MissionManager : MonoBehaviour
             }
 
             // [All-rule-based 시뮬레이션] 콘솔 누적 성공률 — 학습 없이 평가 모드
-            EvaluationStats.RecordEpisode(taskSuccess, epTargetHeldByAssignee);
+            int targetVal = (tasks.Count > 0 && tasks[0].targetCard != null) ? tasks[0].targetCard.value : 0;
+            EvaluationStats.RecordEpisode(taskSuccess, epTargetHeldByAssignee, targetVal);
         }
     }
 

@@ -210,7 +210,11 @@ public static class EvaluationStats
     private static int countByAssignee, successByAssignee;   // 타깃을 담당자가 보유
     private static int countByHelper,   successByHelper;     // 타깃을 도우미가 보유
 
-    public static void RecordEpisode(bool success, bool targetHeldByAssignee)
+    // 진단: 타깃 카드 값(1~9)별 성공률 — 천장(낮은 값 어려움) vs 버그 판별
+    private static readonly int[] countByValue   = new int[10];
+    private static readonly int[] successByValue = new int[10];
+
+    public static void RecordEpisode(bool success, bool targetHeldByAssignee, int targetValue = 0)
     {
         totalEpisodes++;
         if (targetHeldByAssignee)
@@ -222,6 +226,12 @@ public static class EvaluationStats
         {
             countByHelper++;
             if (success) successByHelper++;
+        }
+
+        if (targetValue >= 1 && targetValue <= 9)
+        {
+            countByValue[targetValue]++;
+            if (success) successByValue[targetValue]++;
         }
 
         if (totalEpisodes % logEveryN == 0) LogStats();
@@ -245,6 +255,17 @@ public static class EvaluationStats
         sb.AppendLine($"  전체           : {success,5}/{total,-5} = {rate:P1}");
         sb.AppendLine($"  타깃=담당자보유 : {successByAssignee,5}/{countByAssignee,-5} = {rateA:P1}");
         sb.AppendLine($"  타깃=도우미보유 : {successByHelper,5}/{countByHelper,-5} = {rateH:P1}");
+
+        // 타깃 값(1~9)별 성공률 — 천장 진단
+        var vb = new System.Text.StringBuilder("  값별 성공률    : ");
+        for (int v = 1; v <= 9; v++)
+        {
+            int n = countByValue[v];
+            int s = successByValue[v];
+            float r = n > 0 ? (float)s / n : 0f;
+            vb.Append($"{v}={s}/{n}({r:P0}) ");
+        }
+        sb.AppendLine(vb.ToString().TrimEnd());
         UnityEngine.Debug.Log(sb.ToString());
     }
 
@@ -253,5 +274,6 @@ public static class EvaluationStats
         totalEpisodes = 0;
         countByAssignee = successByAssignee = 0;
         countByHelper = successByHelper = 0;
+        for (int v = 0; v < 10; v++) { countByValue[v] = 0; successByValue[v] = 0; }
     }
 }
