@@ -160,17 +160,15 @@ public class CrewAgent : Agent
 
     private int DecideWithMCTS(MissionManager mm)
     {
-        int budget, dets;
-        if (mm.overrideMctsAssignee)
+        // 기본값 = Inspector(MissionManager) override 값. 학습 시 env가 덮어쓴다.
+        int budget = mm.overrideMctsBudget          > 0 ? mm.overrideMctsBudget          : 2000;
+        int dets   = mm.overrideMctsDeterminizations > 0 ? mm.overrideMctsDeterminizations : 20;
+
+        var academy = Unity.MLAgents.Academy.Instance;
+        if (academy != null)
         {
-            budget = mm.overrideMctsBudget;
-            dets   = mm.overrideMctsDeterminizations;
-        }
-        else
-        {
-            var academy = Unity.MLAgents.Academy.Instance;
-            budget = Mathf.RoundToInt(academy.EnvironmentParameters.GetWithDefault("mcts_budget", 500f));
-            dets   = Mathf.RoundToInt(academy.EnvironmentParameters.GetWithDefault("mcts_dets",   10f));
+            budget = Mathf.RoundToInt(academy.EnvironmentParameters.GetWithDefault("mcts_budget", budget));
+            dets   = Mathf.RoundToInt(academy.EnvironmentParameters.GetWithDefault("mcts_dets",   dets));
         }
 
         var ctx = mm.BuildMCTSContext(this);
