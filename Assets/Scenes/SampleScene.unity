@@ -8729,7 +8729,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: overrideNumTasks
-      value: 4
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: mctsBudget
