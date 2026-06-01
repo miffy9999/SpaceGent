@@ -20,6 +20,11 @@ public class MissionManager : MonoBehaviour
     public int  overrideMctsBudget = 500;
     public int  overrideMctsDeterminizations = 10;
 
+    [Header("[Eval] Phase1 다중 태스크 테스트 (0=env num_tasks 사용, >0=강제)")]
+    [Tooltip("협력 테스트용: 2~6으로 설정하면 여러 플레이어가 태스크를 나눠 가져\n" +
+             "도우미가 owner 타깃을 보유하는 협력 상황이 생긴다. evaluationLogging과 함께 사용.")]
+    public int overrideNumTasks = 0;
+
     // 현재 진행 중인 미션
     public Mission currentMission { get; private set; }
 
@@ -131,7 +136,10 @@ public class MissionManager : MonoBehaviour
         else
         {
             // 학습(커리큘럼): task 개수를 1개부터 점차 늘린다 (env: num_tasks)
-            taskCount = Mathf.RoundToInt(ep.GetWithDefault("num_tasks", 1f));
+            //   Inspector overrideNumTasks(>0)가 있으면 그것을 우선(에디터 협력 테스트용).
+            taskCount = overrideNumTasks > 0
+                ? overrideNumTasks
+                : Mathf.RoundToInt(ep.GetWithDefault("num_tasks", 1f));
             currentMission = null;
             currentMaxDifficulty = taskCount;
         }
