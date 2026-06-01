@@ -145,6 +145,9 @@ public class MissionManager : MonoBehaviour
         }
         taskCount = Mathf.Clamp(taskCount, 0, MaxPoolSize);
 
+        // 설정 확인 로그 (구성이 바뀔 때만 1회) — overrideNumTasks/정책/budget 적용 여부 확인용
+        LogConfigIfChanged(taskCount);
+
         // WinSpecificCard 태스크 풀 생성 (미배정) — 드래프트로 배정
         GenerateTaskPool(taskCount, captainIndex);
 
@@ -186,6 +189,20 @@ public class MissionManager : MonoBehaviour
             if (task.targetCard != null)
                 used.Add(task.targetCard);
         }
+    }
+
+    // 설정(태스크수/정책/budget)이 직전과 다르면 1회만 콘솔 출력 — 스팸 없이 구성 확인.
+    private string _lastConfigSig;
+    private void LogConfigIfChanged(int taskCount)
+    {
+        var gm = GameManager.Instance;
+        string policy = gm != null ? gm.AiPolicyLabel : "?";
+        string sig = $"{policy}|tasks={taskCount}|b={overrideMctsBudget}|d={overrideMctsDeterminizations}|nt={overrideNumTasks}";
+        if (sig == _lastConfigSig) return;
+        _lastConfigSig = sig;
+        Debug.Log($"[Config] 정책={policy} 태스크수={taskCount} " +
+                  $"(overrideNumTasks={overrideNumTasks}) MCTS budget={overrideMctsBudget} dets={overrideMctsDeterminizations} " +
+                  $"| evalLog={(gm != null && gm.evaluationLogging)}");
     }
 
     // [커리큘럼] 풀의 앞쪽 태스크부터 순차로 N1..N5 순서 토큰 부여
