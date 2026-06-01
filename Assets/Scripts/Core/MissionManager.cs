@@ -128,9 +128,13 @@ public class MissionManager : MonoBehaviour
         int taskCount;
         bool useMissionDb = database != null
                             && (Phase == TrainingMode.Normal || UseInteractiveAutoPick());
-        if (overrideNumTasks > 0)
+        // 강제 태스크 수: GameManager(사용자 편집처) 우선, 없으면 MissionManager 필드
+        var gmForTasks = GameManager.Instance;
+        int forcedTasks = (gmForTasks != null && gmForTasks.overrideNumTasks > 0)
+                          ? gmForTasks.overrideNumTasks : overrideNumTasks;
+        if (forcedTasks > 0)
         {
-            taskCount = overrideNumTasks;
+            taskCount = forcedTasks;
             currentMission = null;
             currentMaxDifficulty = taskCount;
         }
@@ -201,11 +205,13 @@ public class MissionManager : MonoBehaviour
     {
         var gm = GameManager.Instance;
         string policy = gm != null ? gm.AiPolicyLabel : "?";
-        string sig = $"{policy}|tasks={taskCount}|b={overrideMctsBudget}|d={overrideMctsDeterminizations}|nt={overrideNumTasks}";
+        int budget = gm != null ? gm.mctsBudget : 0;
+        int dets   = gm != null ? gm.mctsDeterminizations : 0;
+        string sig = $"{policy}|tasks={taskCount}|b={budget}|d={dets}";
         if (sig == _lastConfigSig) return;
         _lastConfigSig = sig;
         Debug.Log($"[Config] 정책={policy} 태스크수={taskCount} " +
-                  $"(overrideNumTasks={overrideNumTasks}) MCTS budget={overrideMctsBudget} dets={overrideMctsDeterminizations} " +
+                  $"MCTS budget={budget} dets={dets} " +
                   $"| evalLog={(gm != null && gm.evaluationLogging)}");
     }
 

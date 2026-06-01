@@ -44,6 +44,14 @@ public class GameManager : MonoBehaviour
     [Tooltip("몇 미션마다 누적 성공률을 콘솔에 출력할지")]
     public int evalLogEvery = 50;
 
+    [Header("MCTS / 평가 파라미터 (여기서 설정)")]
+    [Tooltip("Phase1 강제 태스크 수 (0=커리큘럼 num_tasks). 협력 테스트는 3~6.")]
+    public int overrideNumTasks = 0;
+    [Tooltip("MCTS 총 iteration budget (>0). 클수록 깊은 탐색·느림.")]
+    public int mctsBudget = 2000;
+    [Tooltip("MCTS determinization(손패 표본) 수. 불완전정보 분산 감소.")]
+    public int mctsDeterminizations = 20;
+
     // 현재 AI 정책 라벨 (RL / RuleBased / MCTS) — EvalStats 태그용.
     //   AI 슬롯(players[1])이 HeuristicOnly면 aiPolicy, 아니면 RL(트레이너 구동).
     public string AiPolicyLabel
