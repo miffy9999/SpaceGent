@@ -664,6 +664,13 @@ public class MissionManager : MonoBehaviour
 
     private void GiveTeamReward(bool success)
     {
+        // 평가 집계 (미션당 1회 — missionEnded 가드로 보장). 정책별 누적 성공률 콘솔 로그.
+        var gm = GameManager.Instance;
+        if (gm != null && gm.evaluationLogging)
+            EvalStats.Record(gm.AiPolicyLabel,
+                             currentMission != null ? currentMission.totalTaskCount : tasks.Count,
+                             success);
+
         // 인터랙티브 플레이: 결과 패널 표시 + 다음 미션 진행 (보상은 학습용이라 생략 가능)
         if (UseInteractiveAutoPick())
         {

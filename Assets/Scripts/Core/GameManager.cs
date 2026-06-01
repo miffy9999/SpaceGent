@@ -38,6 +38,28 @@ public class GameManager : MonoBehaviour
              "MCTS: 모든 AI(도우미 포함)가 PIMC 탐색으로 협력 플레이.")]
     public HeuristicPolicy aiPolicy = HeuristicPolicy.RuleBased;
 
+    [Header("평가 (미션 성공률 누적 콘솔 로그)")]
+    [Tooltip("켜면 미션이 끝날 때마다 EvalStats에 누적, LogEvery마다 콘솔 출력.")]
+    public bool evaluationLogging = false;
+    [Tooltip("몇 미션마다 누적 성공률을 콘솔에 출력할지")]
+    public int evalLogEvery = 50;
+
+    // 현재 AI 정책 라벨 (RL / RuleBased / MCTS) — EvalStats 태그용.
+    //   AI 슬롯(players[1])이 HeuristicOnly면 aiPolicy, 아니면 RL(트레이너 구동).
+    public string AiPolicyLabel
+    {
+        get
+        {
+            if (players.Count >= 2)
+            {
+                var bp = players[1].GetComponent<BehaviorParameters>();
+                if (bp != null && bp.BehaviorType != BehaviorType.HeuristicOnly)
+                    return "RL";
+            }
+            return aiPolicy.ToString();
+        }
+    }
+
     // 인간 플레이어가 실제로 활성인지 (Simulation·배치모드면 false)
     public bool HasInteractiveHuman =>
         playMode == PlayMode.HumanVsAI && !Application.isBatchMode;
@@ -106,6 +128,8 @@ public class GameManager : MonoBehaviour
             teamGroup = new SimpleMultiAgentGroup();
             foreach (var p in players) teamGroup.RegisterAgent(p);
         }
+
+        if (evalLogEvery > 0) EvalStats.LogEvery = evalLogEvery;
 
         communicationManager.InitTokens();
         trickManager.StartGame();
