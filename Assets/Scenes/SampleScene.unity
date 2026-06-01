@@ -8625,7 +8625,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2293992581273220769, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BehaviorType
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2293992581273220769, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorObservationSize
@@ -8681,7 +8681,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4222526385498157083, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BehaviorType
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4222526385498157083, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorObservationSize
@@ -8697,7 +8697,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5738473493467871465, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BehaviorType
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5738473493467871465, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorObservationSize
@@ -8710,6 +8710,10 @@ PrefabInstance:
     - target: {fileID: 5738473493467871465, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.m_ActionSpec.BranchSizes.Array.size
       value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
+      propertyPath: aiPolicy
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: playMode
@@ -8720,16 +8724,24 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1665506423}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
+      propertyPath: evalLogEvery
+      value: 200
+      objectReference: {fileID: 0}
+    - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: cardSpriteMapping
       value: 
       objectReference: {fileID: 11400000, guid: b2a092c55546dc649ba0c51339f7412b, type: 2}
+    - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
+      propertyPath: evaluationLogging
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: taskSpriteMapping
       value: 
       objectReference: {fileID: 11400000, guid: 45b5e419c86117445b427a57d04c2693, type: 2}
     - target: {fileID: 8274042862943962447, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BehaviorType
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8274042862943962447, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: m_BrainParameters.VectorObservationSize

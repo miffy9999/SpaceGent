@@ -18,7 +18,7 @@ using UnityEngine;
 // =====================================================================
 public static class Determinizer
 {
-    private const int MaxRetries = 100;
+    private const int MaxRetries = 8;   // MCV 그리디라 보통 1회에 성공 — 표본 다양성용 소수 재시도
 
     // ---------------------------------------------------------------
     // 통신 위치 제약: 특정 플레이어가 특정 무늬에 가질 수 있는 값 범위.
@@ -92,7 +92,7 @@ public static class Determinizer
             }
         }
 
-        // 분배 시도
+        // 분배 시도 (MCV: 가장 제약이 심한 카드부터 배치 → 막다른 길 최소화)
         for (int retry = 0; retry < MaxRetries; retry++)
         {
             ApplyForced(hands, forced);
@@ -104,13 +104,24 @@ public static class Determinizer
                 if (i != selfIdx) hands[i].Clear();
         }
 
-        // MaxRetries 초과 시: 위치/void 제약 완화하고 1번 더 시도 (fail-soft)
-        Debug.LogWarning("[Determinizer] 제약 충족 분배 실패 — 통신/void 제약 완화하고 분배");
+        // MaxRetries 초과 시: 위치/void 제약 완화하고 분배 (fail-soft)
+        //   드물게 발생(제약이 정말 빡빡한 표본). 로그는 throttle해서 스팸 방지.
+        WarnFallbackThrottled();
         for (int i = 0; i < playerCount; i++)
             if (i != selfIdx) hands[i].Clear();
         ApplyForced(hands, forced);   // 강제 배치는 유지 (정확 정보)
         DistributeIgnoringVoids(unplayed, hands, selfIdx, handSizes, rng);
         return hands;
+    }
+
+    // fallback 경고 throttle: 256회마다 1번만 출력 (시뮬 스팸 방지)
+    private static int s_fallbackCount;
+    private static void WarnFallbackThrottled()
+    {
+        s_fallbackCount++;
+        if ((s_fallbackCount & 0xFF) == 1)
+            Debug.LogWarning($"[Determinizer] 제약 분배 fallback 누적 {s_fallbackCount}회 " +
+                             "(통신/void 제약 완화하고 분배). 빈번하면 제약 충돌 점검.");
     }
 
     // 강제 보유 카드를 해당 플레이어 손에 배치 (재시도마다 호출 전 hands는 self만 남김)
@@ -166,31 +177,72 @@ public static class Determinizer
         Dictionary<int, Dictionary<Card.Suit, SuitLimit>> limits,
         System.Random rng)
     {
-        // 순서 shuffle
-        var pool = new List<Card>(unplayed);
-        Shuffle(pool, rng);
+        // 남은 카드 (셔플로 타이브레이크 다양성 확보)
+        var remaining = new List<Card>(unplayed);
+        Shuffle(remaining, rng);
 
-        foreach (var card in pool)
+        var cands = new List<int>(hands.Length);
+
+        while (remaining.Count > 0)
         {
-            var candidates = new List<int>();
-            for (int p = 0; p < hands.Length; p++)
+            // MCV: 후보 플레이어가 가장 적은 카드를 먼저 배치 → 막다른 길 최소화
+            int pickCardIdx = -1;
+            int pickCandCount = int.MaxValue;
+            int pickChosen = -1;
+
+            for (int ci = 0; ci < remaining.Count; ci++)
             {
-                if (p == selfIdx) continue;
-                if (hands[p].Count >= handSizes[p]) continue;     // 이미 full
-                if (knownVoids != null && knownVoids[p] != null
-                    && knownVoids[p].Contains(card.suit)) continue; // void
-                if (ViolatesLimit(limits, p, card)) continue;       // 통신 위치 제약
-                candidates.Add(p);
+                CollectCandidates(remaining[ci], hands, selfIdx, handSizes, knownVoids, limits, cands);
+                if (cands.Count == 0) return false;             // 어디에도 못 놓음 → 실패
+                if (cands.Count < pickCandCount)
+                {
+                    pickCandCount = cands.Count;
+                    pickCardIdx   = ci;
+                    pickChosen    = ChooseByCapacity(cands, hands, handSizes, rng);
+                    if (pickCandCount == 1) break;              // 더 제약 심한 건 없음
+                }
             }
-            if (candidates.Count == 0) return false;
-            int chosen = candidates[rng.Next(candidates.Count)];
-            hands[chosen].Add(card);
+
+            hands[pickChosen].Add(remaining[pickCardIdx]);
+            remaining.RemoveAt(pickCardIdx);
         }
 
         // 모든 플레이어 손패 크기 정확한지 검증
         for (int p = 0; p < hands.Length; p++)
             if (hands[p].Count != handSizes[p]) return false;
         return true;
+    }
+
+    // card를 받을 수 있는 플레이어 목록을 result에 채운다 (full/void/통신 제약 준수).
+    private static void CollectCandidates(
+        Card card, List<Card>[] hands, int selfIdx, int[] handSizes,
+        HashSet<Card.Suit>[] knownVoids,
+        Dictionary<int, Dictionary<Card.Suit, SuitLimit>> limits,
+        List<int> result)
+    {
+        result.Clear();
+        for (int p = 0; p < hands.Length; p++)
+        {
+            if (p == selfIdx) continue;
+            if (hands[p].Count >= handSizes[p]) continue;          // full
+            if (knownVoids != null && knownVoids[p] != null
+                && knownVoids[p].Contains(card.suit)) continue;    // void
+            if (ViolatesLimit(limits, p, card)) continue;          // 통신 위치 제약
+            result.Add(p);
+        }
+    }
+
+    // 후보 중 남은 용량이 가장 큰 플레이어 선택 (균형 분배, 타이는 랜덤).
+    private static int ChooseByCapacity(List<int> cands, List<Card>[] hands, int[] handSizes, System.Random rng)
+    {
+        int bestCap = -1, bestCount = 0, chosen = cands[0];
+        foreach (int p in cands)
+        {
+            int cap = handSizes[p] - hands[p].Count;
+            if (cap > bestCap) { bestCap = cap; bestCount = 1; chosen = p; }
+            else if (cap == bestCap) { bestCount++; if (rng.Next(bestCount) == 0) chosen = p; }
+        }
+        return chosen;
     }
 
     // 통신 위치 제약 위반 여부 (card를 player p에게 줄 수 없는가)
