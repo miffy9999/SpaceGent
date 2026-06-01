@@ -38,8 +38,15 @@ behaviors:
 #   보상(그룹): task 완수 +1 / 실패 -1 (실패 시 즉시 미션 종료).
 #   → 에피소드 그룹 리턴 ≈ (완수 task 수) - (실패 시 1). num_tasks개 모두 완수 시 +num_tasks.
 #
-#   진급 기준(threshold)은 그룹 평균 보상. num_tasks=1에서 mean=2*성공률-1 이므로
-#   0.6 ≈ 성공률 80%. 단계가 올라갈수록 천장이 커지되 난이도도 오르므로 값은 튜닝 대상.
+#   ※ 천장 측정(ceiling_test/ceiling_sim.py, 규칙 충실 재현 2만 딜)으로 교정한 threshold:
+#     통신은 트릭 사이에만 쓰고 드래프트엔 못 쓴다 → 드래프트는 "자기 손패만" 보고 결정.
+#     그 부분관측 천장(coop휴리스틱+자기손패 드래프트)으로 측정한 평균 그룹 리턴:
+#       N=1: 0.087(성공54%) / N=2: 0.068(22%) / N=3: 0.120(8%) / N=4: 0.231(2.5%)
+#     (완전정보 best-owner면 N=1이 92%지만, 그 정보는 학습으로 접근 불가.)
+#     기존 0.6/0.8/1.0 은 천장(최대 0.23)을 모두 초과 → 전 스테이지 도달 불가였음(정체 원인).
+#   주의: measure=reward는 부분점수 때문에 N↑일수록 성공률 폭락에도 평균리턴이 오히려 상승
+#         → 난이도를 못 가린다. 근본 해법은 보상을 "미션 성공 이진(+1/-1)"으로 바꿔
+#         리턴이 성공률과 일치하게 만드는 것(추후). 아래 값은 천장 아래로 둔 잠정치.
 # ──────────────────────────────────────────────
 environment_parameters:
   num_tasks:
@@ -50,7 +57,11 @@ environment_parameters:
           behavior: CrewAgent
           signal_smoothing: true
           min_lesson_length: 100
-          threshold: 0.6
+          threshold: 0.05      # 천장 0.087(성공≈54%) 아래. 드래프트를 실제로 학습해야 도달
+                               # (랜덤 owner면 -0.24). 0.05≈성공 52.5%.
+                               # ※ 드래프트 shaping(MissionManager DraftShapeScale=0.3)이 그룹보상에
+                               #   더해짐 → 좋은 드래프트면 +0.3 오프셋. measure가 (2p-1)+shaping이 되므로
+                               #   학습 관찰 후 임계값 재튜닝 가능(예: 0.1~0.2).
         value: 1
 
       - name: Stage2_2tasks
@@ -59,7 +70,7 @@ environment_parameters:
           behavior: CrewAgent
           signal_smoothing: true
           min_lesson_length: 100
-          threshold: 0.8
+          threshold: 0.0       # 천장 0.068. 순(net) 비음수면 진급(잠정).
         value: 2
 
       - name: Stage3_3tasks
@@ -68,7 +79,7 @@ environment_parameters:
           behavior: CrewAgent
           signal_smoothing: true
           min_lesson_length: 100
-          threshold: 1.0
+          threshold: 0.05      # 천장 0.120. (measure=reward 한계로 잠정; 근본은 보상 이진화)
         value: 3
 
       - name: Stage4_4tasks

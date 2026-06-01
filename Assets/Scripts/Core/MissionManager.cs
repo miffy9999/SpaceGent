@@ -57,6 +57,12 @@ public class MissionManager : MonoBehaviour
     private const float PenaltyTaskFail    = -1.0f;
     private const float PenaltyMissionFail = -2.0f;
 
+    // 드래프트 shaping (Phase1 학습용): 배정 순간 "뽑힌 owner가 4명 중 얼마나 좋은가"를
+    //   owner_score로 평가해 그룹 보상. 천장 측정(ceiling_test/ceiling_sim.py)의 owner_score 이식.
+    //   최고 owner면 +scale, 최악이면 -scale. 종단 ±1보다 작게 둬 트릭 플레이를 안 덮음.
+    //   목적: 드래프트 액션에 즉시 크레딧 → 38%(랜덤 owner) → ~55%(부분관측 천장) 학습 유도.
+    private const float DraftShapeScale = 0.3f;
+
     // ───────────────────────────────────────────────────────────────
     // 학습 모드
     //   Normal            : 실제 게임 (커리큘럼/미션보상 정식). 미션 DB에서 태스크 수 결정.
@@ -410,6 +416,52 @@ public class MissionManager : MonoBehaviour
         tasks.Add(task);
         taskPool.RemoveAt(poolIndex);
         Debug.Log($"[Mission] {player.name} → {task} 선택");
+        RewardDraftOwnerQuality(task, player);   // 드래프트 시점 보상(B): owner 품질
+    }
+
+    // ---------------------------------------------------------------
+    // 드래프트 shaping (B) — 배정된 owner가 4명 중 얼마나 좋은 owner인지로 그룹 보상.
+    //   q = (ownerScore - min) / (max - min) ∈ [0,1] → r = scale·(q-0.5)·2 ∈ [-scale, +scale].
+    //   Phase1_CoopSingle(학습)에서만. 전체 손패는 보상 회로(privileged)에서만 사용, 관측 불변.
+    // ---------------------------------------------------------------
+    private void RewardDraftOwnerQuality(TaskCard task, CrewAgent owner)
+    {
+        if (Phase != TrainingMode.Phase1_CoopSingle) return;
+        if (task == null || task.targetCard == null) return;
+        var players = GameManager.Instance.players;
+        if (players == null || players.Count == 0) return;
+
+        float min = float.MaxValue, max = float.MinValue, ownerS = 0f;
+        foreach (var p in players)
+        {
+            float s = OwnerScore(p.hand, task.targetCard);
+            if (p == owner) ownerS = s;
+            if (s < min) min = s;
+            if (s > max) max = s;
+        }
+        float q = (max > min) ? (ownerS - min) / (max - min) : 0.5f;   // 동점이면 중립(0)
+        GameManager.Instance.AddGroupOrLearnerReward(DraftShapeScale * (q - 0.5f) * 2f);
+    }
+
+    // owner_score 이식(ceiling_sim.py와 동일): 자기 손패만으로 WinSpecificCard owner 적합도.
+    private float OwnerScore(System.Collections.Generic.List<Card> hand, Card target)
+    {
+        if (hand == null) return 0f;
+        int rockets = 0, maxRocket = 0;
+        foreach (var c in hand)
+            if (c.suit == Card.Suit.Rocket) { rockets++; if (c.value > maxRocket) maxRocket = c.value; }
+        float score = 2.0f * rockets + 0.2f * maxRocket;
+
+        if (hand.Contains(target))
+            score += 1.0f + 0.4f * target.value;                      // 타깃 보유: 값 높을수록 자력 승리 쉬움
+        else
+        {
+            int beaters = 0;
+            foreach (var c in hand)
+                if (c.suit == target.suit && c.value > target.value) beaters++;
+            score += 1.2f * beaters;                                   // 미보유: 슈트 내 타깃을 이길 카드 수
+        }
+        return score;
     }
 
     private void CompleteTaskSelection()
