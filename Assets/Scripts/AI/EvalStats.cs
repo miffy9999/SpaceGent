@@ -25,10 +25,15 @@ public static class EvalStats
     private static readonly Dictionary<int, int> countByTasks   = new Dictionary<int, int>();
     private static readonly Dictionary<int, int> successByTasks = new Dictionary<int, int>();
 
+    // 태스크 완수 합계 (평균 완수율 = 민감한 비교 지표)
+    private static long sumCompleted, sumTotalTasks;
+
     // ---------------------------------------------------------------
     // 미션 1회 결과 기록. policy 라벨이 바뀌면(정책 전환) 누적 리셋.
+    //   completedTasks/totalTasks: 평균 완수율 집계용 (전부-아니면-전무보다 민감).
     // ---------------------------------------------------------------
-    public static void Record(string policy, int taskCount, bool ok)
+    public static void Record(string policy, int taskCount, bool ok,
+                              int completedTasks = 0, int totalTasks = 0)
     {
         if (policy != currentPolicy)
         {
@@ -39,6 +44,8 @@ public static class EvalStats
 
         total++;
         if (ok) success++;
+        sumCompleted  += completedTasks;
+        sumTotalTasks += totalTasks;
 
         if (!countByTasks.ContainsKey(taskCount)) { countByTasks[taskCount] = 0; successByTasks[taskCount] = 0; }
         countByTasks[taskCount]++;
@@ -50,6 +57,7 @@ public static class EvalStats
     public static void Reset()
     {
         total = success = 0;
+        sumCompleted = sumTotalTasks = 0;
         countByTasks.Clear();
         successByTasks.Clear();
     }
@@ -60,14 +68,16 @@ public static class EvalStats
         if (total == 0) { Debug.Log("[Eval] 집계된 미션 없음"); return; }
 
         float rate = (float)success / total;
+        float avgComplete = sumTotalTasks > 0 ? (float)sumCompleted / sumTotalTasks : 0f;
         var sb = new StringBuilder();
         sb.AppendLine($"[Eval] 미션 {total}회 | 정책={currentPolicy}");
-        sb.AppendLine($"  전체           : {success}/{total} = {rate:P1}");
+        sb.AppendLine($"  미션 성공률     : {success}/{total} = {rate:P1}");
+        sb.AppendLine($"  평균 태스크 완수 : {sumCompleted}/{sumTotalTasks} = {avgComplete:P1}  (민감 비교 지표)");
 
         // 태스크 개수별 (난이도 프록시) 오름차순
         var keys = new List<int>(countByTasks.Keys);
         keys.Sort();
-        var line = new StringBuilder("  태스크수별     : ");
+        var line = new StringBuilder("  태스크수별 성공 : ");
         foreach (int k in keys)
         {
             int n = countByTasks[k];
