@@ -121,13 +121,20 @@ public class MissionManager : MonoBehaviour
         epHelperPlays = epVoluntaryContests = 0;
         RuleBasedHelper.ResetEpisodeStats();
 
-        // 태스크 개수 결정
-        //   인터랙티브 플레이(인간 있음) 또는 Normal 학습 → 미션 DB에서 실제 미션 사용
-        //   배치/학습(Phase1, 인간 없음)            → 커리큘럼 num_tasks
+        // 태스크 개수 결정 (우선순위)
+        //   0) overrideNumTasks(>0) — 모드 무관 강제 (에디터 협력 평가용, 최우선)
+        //   1) 인터랙티브/Normal      — 미션 DB의 실제 미션
+        //   2) 그 외(Phase1 학습)     — 커리큘럼 num_tasks
         int taskCount;
         bool useMissionDb = database != null
                             && (Phase == TrainingMode.Normal || UseInteractiveAutoPick());
-        if (useMissionDb)
+        if (overrideNumTasks > 0)
+        {
+            taskCount = overrideNumTasks;
+            currentMission = null;
+            currentMaxDifficulty = taskCount;
+        }
+        else if (useMissionDb)
         {
             currentMaxDifficulty = Mathf.RoundToInt(ep.GetWithDefault("difficulty", 9f));
             currentMission = SelectNextMission();
@@ -136,10 +143,7 @@ public class MissionManager : MonoBehaviour
         else
         {
             // 학습(커리큘럼): task 개수를 1개부터 점차 늘린다 (env: num_tasks)
-            //   Inspector overrideNumTasks(>0)가 있으면 그것을 우선(에디터 협력 테스트용).
-            taskCount = overrideNumTasks > 0
-                ? overrideNumTasks
-                : Mathf.RoundToInt(ep.GetWithDefault("num_tasks", 1f));
+            taskCount = Mathf.RoundToInt(ep.GetWithDefault("num_tasks", 1f));
             currentMission = null;
             currentMaxDifficulty = taskCount;
         }
