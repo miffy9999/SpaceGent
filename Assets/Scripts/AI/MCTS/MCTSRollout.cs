@@ -65,13 +65,16 @@ public static class MCTSRollout
         int leadIdx = TryLeadOwnTargetIfWinning(s, legal);
         if (leadIdx >= 0) return leadIdx;
 
-        // 4) 내가 든 미완료 목표(들) — 흘리지 않도록 후보에서 제외하고 Safest
-        var myTargets = new HashSet<Card>();
-        foreach (var t in s.PendingTargetsOf(cur)) myTargets.Add(t);
+        // 4) 미완료 목표 카드(내 것 + 동료 것 전부)는 함부로 버리지 않는다.
+        //    동료 목표를 throwaway로 내면 낭비/가로채기로 이어져 미션 실패 위험.
+        //    목표가 아닌 카드 중 Safest를 우선 선택, 없으면 일반 Safest.
+        var pendingTargets = new HashSet<Card>();
+        foreach (var t in s.tasks)
+            if (!t.completed && !t.failed && t.target != null) pendingTargets.Add(t.target);
 
-        if (myTargets.Count > 0)
+        if (pendingTargets.Count > 0)
         {
-            int se = SafestExcluding(s, legal, myTargets);
+            int se = SafestExcluding(s, legal, pendingTargets);
             if (se >= 0) return se;
         }
         return SafestIndex(s, legal);

@@ -8733,11 +8733,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: mctsBudget
-      value: 8000
+      value: 1000
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: mctsDeterminizations
-      value: 20
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: cardSpriteMapping
