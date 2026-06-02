@@ -102,7 +102,10 @@ public static class MCTSRollout
         return -1;
     }
 
-    // 리드 상황에서 내 목표 카드를 내면 반드시 이기는 경우(다른 손패 모두 알고 판정) → 그 목표 리드.
+    // 리드 상황에서 내 목표 카드를 리드해 완수를 노린다.
+    //   협력 게임: 동료는 내 목표 트릭을 트럼프로 가로채지 않는다(롤아웃 정책도 양보).
+    //   따라서 "보장 승리"뿐 아니라 "그 무늬에서 남은 최고값"이면 리드한다
+    //   (같은 무늬로는 아무도 못 이기고, 트럼프 가로채기는 협력상 없음 → 중간값 목표도 완수).
     private static int TryLeadOwnTargetIfWinning(MCTSState s, List<int> legal)
     {
         if (s.cardsOnTable.Count != 0) return -1;   // 리드만
@@ -114,10 +117,23 @@ public static class MCTSRollout
             if (t.completed || t.failed) continue;
             if (t.ownerIdx != cur) continue;
             foreach (int i in legal)
-                if (hand[i].Equals(t.target) && LeadGuaranteesWin(s, hand[i]))
+            {
+                if (!hand[i].Equals(t.target)) continue;
+                if (LeadGuaranteesWin(s, hand[i]) || IsHighestRemainingOfSuit(s, hand[i]))
                     return i;
+            }
         }
         return -1;
+    }
+
+    // 결정화 상태에서 card가 그 무늬(또는 로켓끼리)에서 남은 최고값인가.
+    //   color 카드: 같은 무늬로 더 높은 카드가 아무 손에도 없으면 true (협력상 트럼프 가로채기 없음 가정).
+    private static bool IsHighestRemainingOfSuit(MCTSState s, Card card)
+    {
+        for (int p = 0; p < s.hands.Length; p++)
+            foreach (var c in s.hands[p])
+                if (c.suit == card.suit && c.value > card.value) return false;
+        return true;
     }
 
     // 결정화 상태(모든 손패 알려짐)에서 lead 카드를 내면 아무도 못 이기는가.
