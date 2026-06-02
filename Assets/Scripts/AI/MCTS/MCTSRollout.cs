@@ -13,8 +13,11 @@ using System.Collections.Generic;
 // =====================================================================
 public static class MCTSRollout
 {
+    // 마지막 N장(≈2트릭) 이하가 남으면 휴리스틱 대신 완전탐색으로 정확히 푼다.
+    public const int EndgameCards = 8;
+
     // ---------------------------------------------------------------
-    // Rollout: terminal까지 진행. Reward 반환.
+    // Rollout: 휴리스틱으로 진행하다 엔드게임에 들어가면 정확 솔버로 마무리.
     // ---------------------------------------------------------------
     public static float Rollout(MCTSState state)
     {
@@ -22,15 +25,45 @@ public static class MCTSRollout
         int safety = 200;
         while (!s.IsTerminal() && safety-- > 0)
         {
+            if (RemainingCards(s) <= EndgameCards)
+                return ExactSolve(s);   // 결정화=완전정보, 협력 → 정확 가치
+
             int action = Decide(s);
-            if (action < 0)
-            {
-                // 합법 액션 없음 → 비정상 종료
-                break;
-            }
+            if (action < 0) break;
             s.ApplyAction(action);
         }
         return s.Reward();
+    }
+
+    private static int RemainingCards(MCTSState s)
+    {
+        int n = 0;
+        foreach (var h in s.hands) n += h.Count;
+        return n;
+    }
+
+    // ---------------------------------------------------------------
+    // 엔드게임 정확 솔버: 협력(전원 같은 보상 최대화)이므로 모든 플레이어의
+    //   수를 우리가 통제해 달성 가능한 최대 보상을 반환(완전탐색 + 1.0 컷오프).
+    //   결정화 상태라 모든 손패를 알고, follow-suit가 분기를 크게 줄인다.
+    // ---------------------------------------------------------------
+    private static float ExactSolve(MCTSState s)
+    {
+        if (s.IsTerminal()) return s.Reward();
+
+        var legal = s.LegalActions();
+        if (legal.Count == 0) return s.Reward();
+
+        float best = -1f;
+        foreach (int idx in legal)
+        {
+            var c = s.Clone();
+            c.ApplyAction(idx);
+            float v = ExactSolve(c);
+            if (v > best) best = v;
+            if (best >= 1f) break;   // 더 좋을 수 없음
+        }
+        return best;
     }
 
     // ---------------------------------------------------------------
