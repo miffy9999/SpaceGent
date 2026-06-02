@@ -15,7 +15,7 @@ using UnityEngine;
 // =====================================================================
 public static class MCTSSearch
 {
-    public const float DefaultExplorationC = 0.7f;    // 보상이 [0,1]이라 sqrt2보다 작게
+    public const float DefaultExplorationC = 0.4f;    // 착취 비중↑ (budget 제한+롤아웃 쓸만 → 좋은 수에 집중)
     public const int   DefaultDeterminizations = 10;
     public const int   DefaultBudget = 1000;
 
