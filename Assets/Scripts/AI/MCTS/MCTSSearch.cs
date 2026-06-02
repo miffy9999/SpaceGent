@@ -15,7 +15,7 @@ using UnityEngine;
 // =====================================================================
 public static class MCTSSearch
 {
-    public const float DefaultExplorationC = 0.4f;    // 착취 비중↑ (budget 제한+롤아웃 쓸만 → 좋은 수에 집중)
+    public const float DefaultExplorationC = 1.0f;    // C=0.4<0.7 확인 → 탐색 비중↑가 유리. 1.0 테스트
     public const int   DefaultDeterminizations = 10;
     public const int   DefaultBudget = 1000;
 
