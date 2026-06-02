@@ -62,6 +62,12 @@ public static class MCTSRollout
         int leadIdx = TryLeadOwnTargetIfWinning(s, legal);
         if (leadIdx >= 0) return leadIdx;
 
+        // 3.5) 셋업(stall): 내가 owner인데 목표가 아직 못 이기면(그 무늬 최고값 아님),
+        //      비-목표 "보장 승리" 카드로 트릭을 따 리드를 유지한다.
+        //      → 트릭이 진행되며 같은 무늬 상위 카드가 소진되어 목표가 나중에 최고값이 됨.
+        int stallIdx = TryStallToSetupTarget(s, legal);
+        if (stallIdx >= 0) return stallIdx;
+
         // 4) 미완료 목표 카드(내 것 + 동료 것 전부)는 함부로 버리지 않는다.
         //    동료 목표를 throwaway로 내면 낭비/가로채기로 이어져 미션 실패 위험.
         //    목표가 아닌 카드 중 Safest를 우선 선택, 없으면 일반 Safest.
@@ -124,6 +130,51 @@ public static class MCTSRollout
             }
         }
         return -1;
+    }
+
+    // 셋업(stall): 내가 owner인데 아직 못 이기는 목표가 있으면,
+    //   비-목표 "보장 승리" 카드로 이번 트릭을 따 리드를 유지한다.
+    //   여러 보장승리 카드 중 WinStrength 최소(가장 덜 아까운)를 사용.
+    private static int TryStallToSetupTarget(MCTSState s, List<int> legal)
+    {
+        if (s.cardsOnTable.Count != 0) return -1;   // 리드 상황만
+        int cur = s.currentPlayer;
+        var hand = s.hands[cur];
+
+        // 내가 아직 못 이기는(=그 무늬 최고값 아닌) 미완료 목표를 들고 있는가?
+        bool hasUnwinnableTarget = false;
+        foreach (var t in s.tasks)
+        {
+            if (t.completed || t.failed || t.ownerIdx != cur || t.target == null) continue;
+            if (HandContains(hand, t.target) && !IsHighestRemainingOfSuit(s, t.target))
+            { hasUnwinnableTarget = true; break; }
+        }
+        if (!hasUnwinnableTarget) return -1;
+
+        // 비-목표 보장승리 카드 중 가장 약한 것으로 트릭을 따 리드 유지
+        int bestIdx = -1, bestScore = int.MaxValue;
+        foreach (int i in legal)
+        {
+            var c = hand[i];
+            if (IsAnyPendingTarget(s, c)) continue;          // 목표 카드는 보존
+            if (!LeadGuaranteesWin(s, c)) continue;          // 확실히 이겨 리드 유지되는 것만
+            int sc = s.WinStrength(c);
+            if (sc < bestScore) { bestScore = sc; bestIdx = i; }
+        }
+        return bestIdx;
+    }
+
+    private static bool HandContains(List<Card> hand, Card card)
+    {
+        foreach (var c in hand) if (c.Equals(card)) return true;
+        return false;
+    }
+
+    private static bool IsAnyPendingTarget(MCTSState s, Card card)
+    {
+        foreach (var t in s.tasks)
+            if (!t.completed && !t.failed && t.target != null && t.target.Equals(card)) return true;
+        return false;
     }
 
     // 결정화 상태에서 card가 그 무늬(또는 로켓끼리)에서 남은 최고값인가.
