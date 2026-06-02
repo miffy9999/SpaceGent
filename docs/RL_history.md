@@ -50,7 +50,7 @@
   > Run4부터 천장 측정(`ceiling_test/ceiling_sim.py`) 기반으로 하향. measure=reward는 부분점수 때문에
   > 난이도를 못 가리는 한계가 있어, 근본 해법은 보상을 "미션 성공 이진(+1/-1)"으로 바꾸는 것.
 
-- **액션 공간(고정)**: `[10, 2, 4]` — Branch0 카드/풀슬롯, Branch1 통신/(선택시)take·pass, Branch2 예비.
+- **액션 공간(고정)**: `[10, 2, 4]` — Branch0 카드/풀슬롯, Branch1 통신사용/(선택시)take·pass, Branch2 통신포지션(Run6~: 0=Highest/1=Only/2=Lowest of task수트, 3=마스킹).
 - **씬**: 4명 모두 `BehaviorType=Default`.
 
 ---
@@ -129,38 +129,82 @@
 - **목적 (왜)**: Run1~4 종합 = 정체 병목이 **드래프트 미학습**으로 확정(RL 38% ≈ 천장 sim의 랜덤 owner 37.8%).
   드래프트는 학습 액션인데 신호가 에피소드 끝 희소 ±1뿐이라 못 배움 → **드래프트 시점에 즉시 크레딧**을 줘
   38%(랜덤 owner) → ~55%(부분관측 천장)로 끌어올릴 수 있는지 검증. (백로그에서 선택, [`ceiling.md`](ceiling.md) §7)
-- **결과 분석**: _(학습 종료 후 작성)_ — 볼 것: Group Reward −0.24→+0.1~+0.4? / **Lesson 0→1 진급?** / coop/assignee_success 38%→~55%?
+- **결과 분석** (10M 스텝 완료):
+  - **Lesson 0 고정**(말기까지 0회 진급). Group Reward -0.333 → **-0.256**(end 10% 평균).
+  - 시점별 추이: 100k −0.39 → 1M −0.31 → 3M −0.22 → **5M −0.19(피크①)** → 7M −0.32(회귀) → **9M −0.18(피크②)** → 10M −0.22. Run3 피크(2M −0.16)보다 낮고 말기 평균도 Run3(-0.225)보다 열등.
+  - 말기 mean -0.256 ≈ **성공률 37.2%** — shaping 포함 기준으로 Run1~4(≈38%) 이하.
+  - coop: assignee_success 0.308 → **0.348** / success_by_assignee 0.312 → 0.363 / success_by_helper 0.308 → 0.322. **전항목 Run3 말기(0.388/0.484/0.321)보다 낮음.**
+  - voluntary_contest_rate: 0.064 → **0.063**(사실상 불변) — 에이전트가 shaping 신호에 반응해 드래프트 전략을 바꾸지 않음.
+  - Entropy 1.005 → 0.446. Value Loss 0.339 → 0.415.
+  - **해석 — 드래프트 shaping(B) 효과 없음, 오히려 소폭 열화**:
+    - 피크(−0.18~−0.19)는 Run3 피크(−0.16)보다 낮고, 말기 기준 성공률도 낮아 shaping이 게임 성능을 개선하지 못함.
+    - voluntary_contest_rate 불변 → 에이전트가 shaping 보상을 드래프트 전략 학습에 활용하지 못함(draft 행동 변화 없음).
+    - 해석: ①OwnerScore가 에이전트의 부분관측 정보와 일치하지 않아 그레이디언트 방향이 엉킴, ②shaping(±0.3)이 에피소드 내 결과 잡음(-1~+1) 대비 너무 작아 유효 신호 희미, ③shaping 추가로 value 함수 학습 난이도 증가(Value Loss Run3 대비 유지, Baseline Loss 존재).
+    - **결론: B도 정체 해결 실패.** 즉시 크레딧을 추가해도 에이전트가 드래프트에서 다른 행동을 탐색하지 않는 한 효과 없다 → 탐색 자체를 강제하는 (E)가 다음 우선 후보.
+
+## Run 6 — `build_vector313_draftE`
+
+- **시작**: 2026-06-02 · 빌드 대기
+- **빌드 상태**: 관측 313·액션 [10,2,4] 불변. **C# 3곳 + YAML 변경.**
+  1. **드래프트 shaping 제거** — `AssignTask`에서 `RewardDraftOwnerQuality` 호출 삭제. Run5의 OwnerScore 기반 ±0.3이 사령관 선점 균형을 오히려 강화했음을 확인, 완전 제거.
+  2. **ε-greedy 드래프트 오버라이드** (`MissionManager.AgentSelectTask`) — env param `draft_explore_eps`로 패스 가능 위치(cursor<3)의 take/pass를 확률 ε으로 랜덤 강제. YAML 커리큘럼: progress 0→50% ε=1.0, 50→80% ε=0.5, 80→100% ε=0.0.
+  3. **통신 포지션 학습** (`CommunicationToken`, `CommunicationManager`, `CrewAgent`) — Branch2를 task 타깃 수트 기준 포지션 선택(0=Highest/1=Only/2=Lowest)으로 재정의. 기존 "최고값 카드 자동 선택" 휴리스틱 대체. task 수트 카드가 없으면 Branch1=1도 마스킹.
+- **실행**: `mlagents-learn config/trainer_config.yaml --env=<새빌드> --run-id=build_vector313_draftE`
+- **목적 (왜)**: Run5 로그 실측(351K 에피소드)으로 **사령관(cursor=0)이 64% 선점하는 균형** 확인.
+  - shaping(B)이 역효과였음: 로켓4 보유 → OwnerScore 높음 → 사령관 take 시 +보상 → 균형 강화.
+  - value function이 "비사령관이 owner일 때 어떻게 되는지" 경험이 전무 → ε-greedy로 owner 분포를 50/25/12.5/12.5로 강제 다양화, value function이 "타깃 카드 보유자가 owner = 성공률 높음"을 학습하도록 유도.
+  - 통신도 task 수트 외 정보 공개는 의미 없으므로 task 수트 중심으로 재설계, 포지션 선택까지 학습에 포함.
+- **결과 분석**: _(학습 종료 후 작성)_
+  - 확인 포인트: cursor 분포 50/25/12/12 수렴 여부 (ε 오버라이드 작동 검증) / ε=0 구간(80%~)에서 사령관 패스+타깃 보유자 take 패턴 출현 / assignee_success 38%→~55%? / Lesson 0→1 진급?
+  - 분석 도구: `Result/logs_analysis/analyze_logs.py build_vector313_draftE`
 
 ---
 
-## 종합 분석 (Run 1~4)
+## 종합 분석 (Run 1~5)
 
-| run | obs | threshold | Lesson 진급 | Group Reward(말기) | ≈성공률 | Entropy(말기) |
+| run | obs | 변경점 | Lesson 진급 | Group Reward(말기) | assignee_success(말기) | Entropy(말기) |
 |---|---|---|---|---|---|---|
-| spacegent_v1 | 257 | 0.6 | 0회 | -0.228 | 38.6% | 0.41 |
-| vector297 | 297 | 0.6 | 0회 | -0.237 | 38.2% | 0.41 |
-| build_vector313 | 313 | 0.6 | 0회 | -0.225 | 38.7% | 0.44 |
-| build_vector313_modified_yaml | 313 | **0.05** | 0회 | -0.236 | 38.2% | 0.40 |
+| spacegent_v1 | 257 | 베이스라인 | 0회 | -0.228 | 38.6% | 0.41 |
+| vector297 | 297 | 통신 관측 추가 | 0회 | -0.237 | 38.1% | 0.41 |
+| build_vector313 | 313 | obs 313 확정 | 0회 | -0.225 | 38.8% | 0.44 |
+| build_vector313_modified_yaml | 313 | threshold 0.05 | 0회 | -0.236 | 38.2% | 0.40 |
+| **build_vector313_draftB** | 313 | **드래프트 shaping +0.3** | **0회** | **-0.256** | **34.8%** | **0.45** |
 
 **결론**
 
-1. **4 run 모두 ~-0.23 / 성공률 ≈38% / Lesson 0**에 수렴. 관측 크기(257→297→313)도, 임계값(0.6→0.05)도 **레버가 아니다.**
+1. **5 run 모두 Lesson 0 고정**. 관측(257→313), 임계값(0.6→0.05), 드래프트 즉시 보상(shaping B) 모두 **레버가 아니다.**
 2. **천장 측정과 정합**(`ceiling_test/ceiling_sim.py`, 2만 딜):
    - random(랜덤 owner) 25% / **coop+랜덤owner 37.8% ◄ RL이 여기** / coop+자기손패드래프트 55% / coop+best-owner(완전정보) 92%.
-   - 즉 RL은 **협력 플레이는 학습, 드래프트는 거의 랜덤.** 38→55는 자기 손패만으로도 가능(학습 가능), 55→92는 정보(통신) 문제.
-3. **학습 시간 문제 아님**: 2M에서 -0.16(42%)까지 갔다가 회귀, entropy 0.4로 수렴 → 나쁜 국소최적에 빠진 것이지 미학습 아님.
-4. **병목 확정 = 드래프트 크레딧/보상.** obs·threshold·RL용량·학습시간 전부 기각됨.
-5. **부수 관찰**: success_by_assignee(owner가 타깃 보유, 0.46~0.50) > success_by_helper(0.31~0.32) — 천장 sim(owner-holds가 더 어려움)과 부호 반대 → 지표 정의 또는 휴리스틱 차이. 2차 확인 대상.
+   - 즉 RL은 **협력 플레이는 학습, 드래프트는 거의 랜덤.** Run5에서 shaping을 줘도 voluntary_contest_rate(드래프트 탐색) 불변 → 탐색 자체가 없어서 shaping 신호가 쓸모없음.
+3. **학습 시간 문제 아님**: 2~3M에서 -0.16~-0.19까지 갔다가 회귀, entropy 0.4로 수렴 → 나쁜 국소최적에 빠진 것.
+4. **병목 재확정 = 드래프트 탐색 부재.** 크레딧(shaping)을 줘도 탐색을 안 하면 의미 없음. → 탐색 강제(E)가 다음 방향.
+5. **부수 관찰**: Run5에서 shaping 추가 후 assignee_success(34.8%)가 Run1~4(38~39%) 이하 → shaping이 value 함수 노이즈를 높여 소폭 열화 가능성.
+
+### 드래프트 cursor 분포 실측 (build_vector313_draftB, 351,021 에피소드)
+
+> `Result/logs_analysis/analyze_logs.py`로 Player-0~7.log 파싱. 가설 검증 목적.
+
+| cursor | 비율 | 성공률 | 의미 |
+|---|---|---|---|
+| 0 (사령관) | **64.3%** | 36.1% | 사령관이 자발적으로 먼저 취함 |
+| 1 | 8.9% | 34.0% | |
+| 2 | 17.9% | 30.0% | |
+| 3 (강제) | **8.9%** | 34.2% | 강제 위치인데 가장 낮은 비율 |
+
+- **원래 가설(cursor=3 지배) 틀림.** 실제는 **사령관(cursor=0)이 64% 선점**.
+- 사령관 성공률(36.1%) < 랜덤 owner 천장(37.8%) → 사령관이 최적 owner가 아님에도 항상 취하는 균형.
+- 분포가 초반/중반/후반 동일 → Run1~5 내내 드래프트 전략 변화 없음 확인.
+- **함장별 이상 패턴**: captain=1/2일 때 cursor=1,3 완전 0%, captain=0/3일 때 cursor=2 완전 0%. 특정 (captain, cursor) 쌍에서 특정 플레이어가 절대 취하지 않는 구조적 패턴 → 원인 미상, 추가 조사 필요.
 
 ## 다음에 시도해볼 방법들  (항상 맨 아래 유지 · 살아있는 백로그)
 
 > 위 회차 결과를 보고 하나 골라 학습 → 새 Run으로 승격(목적·결과 작성) → 이 목록 갱신. 상세 근거: [`ceiling.md`](ceiling.md) §7
 >
-> **현재 진행**: (B) 드래프트 owner-품질 shaping → **Run 5 `build_vector313_draftB`** 로 승격(빌드/실행 대기).
+> **현재 상황**: E(Run6) 빌드·실행 대기.
 
-- **(D) 드래프트 shaping 점진 제거(anneal)** — *왜*: B(Run5)는 휴리스틱 모방이라 천장이 ~55%에 고착될 수 있음.
-  학습 후반 shaping을 0으로 줄이면 고착에서 풀림(단 55%→92%는 드래프트 통신이 없어 한계). **B 성공 후** 검토.
-- **(E) 드래프트 분기 탐색 강화** — *왜*: entropy가 0.4로 조기 수렴 → take/pass 분기 탐색 부족 가능. B로도 안 오르면 beta↑ 또는 분기별 탐색 보너스.
-- **(F) 멀티-task shaping 스케일링(1/N 또는 캡)** — *왜*: N개 task면 배정마다 ±0.3 → 고-N에서 종단 ±1을 압도. **Stage2 진급 후** 필요.
+- **(E) 드래프트 ε-greedy 탐색** ← **Run6 `build_vector313_draftE`로 승격(빌드 대기)**
+- **(F) 멀티-task shaping 스케일링(1/N 또는 캡)** — *왜*: N개 task면 배정마다 ±scale → 고-N에서 종단 ±1을 압도. **Stage2 진급 후** 필요(현재는 미적용).
 - **(보류) (A) 보상 이진화** — *왜 보류*: N=1에선 이미 이진(정체 무관), N≥2에선 보상 희소화로 학습 불리. measure=reward 비단조 문제는 별도(수동 lesson 제어 등)로.
 - **(장기) 드래프트 단계 정보공유/통신** — *왜*: 부분관측 천장 55% → 완전정보 92% 갭은 *정보* 문제. 드래프트 전 정보 공유 수단이 있어야 55% 너머로 감(현재 통신은 플레이 중에만 가능).
+- ~~**(B) 드래프트 shaping**~~ → Run5에서 기각. shaping 신호가 있어도 탐색 없으면 효과 없음.
+- ~~**(D) shaping anneal**~~ → B 실패로 불필요.

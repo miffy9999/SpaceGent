@@ -6,13 +6,14 @@ public enum GlobalMissionRule
     None = 0,
     AllRocketsMustWin        = 1,  // M13: 로켓 1~4가 각각 정확히 1트릭씩 이겨야 함
     NoNineWins               = 2,  // M16,17: 어떤 9 값 카드도 트릭을 이기면 안 됨
-    RocketOneWinsTwice       = 3,  // M26: 로켓-1이 트릭을 정확히 2번 이겨야 함
+    ColorOnesWinTwice        = 3,  // M26: 색깔(비로켓) 1 값 카드들이 트릭을 정확히 2번 이겨야 함
     BalanceTricks            = 4,  // M29,34: 어떤 플레이어도 다른 플레이어보다 2트릭 이상 앞설 수 없음
     RocketsInOrder           = 5,  // M44: 로켓은 1→2→3→4 오름차순으로만 트릭을 이길 수 있음
     CommanderFirstAndLast    = 6,  // M34: 사령관이 첫 트릭과 마지막 트릭을 이겨야 함 (+BalanceTricks)
     OmegaOnLastTrick         = 7,  // M48: Ω 태스크는 마지막 트릭에서 달성돼야 함
     OnePlayerFirstFourOnly   = 8,  // M50: 한 명은 첫 4트릭만, 다른 한 명은 마지막 트릭만
     LeftOfPinkNineWinsAllPink = 9, // M46: Pink-9를 가진 플레이어 왼쪽이 핑크 카드를 모두 이겨야 함
+    ColorOneWins             = 10, // M9: 색깔(비로켓) 1 값 카드 한 장이 어떤 트릭이든 이겨야 함
 }
 
 // ── 미션 특수 규칙 플래그 (트릭 진행 중 적용) ────────────────────────────────

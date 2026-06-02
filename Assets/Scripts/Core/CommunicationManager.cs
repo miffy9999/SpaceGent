@@ -113,6 +113,24 @@ public class CommunicationManager : MonoBehaviour
         return t.TryReveal(card);
     }
 
+    /// <summary>
+    /// AI 정책이 포지션을 선택한 통신.
+    ///   pos = Highest(0) / Only(1) / Lowest(2) — Branch2 값에서 매핑됨.
+    ///   공개 수트는 현재 task 타깃 수트로 고정 (N=1; 이후 N>1 확장 시 수정).
+    ///   데드존이면 pos/suit 무시하고 위치 비공개 공개(TryRevealDeadZone).
+    /// </summary>
+    public bool UseCommTokenWithPosition(CrewAgent agent, CommunicationToken.RevealPosition pos)
+    {
+        CommunicationToken t = GetCommToken(agent);
+        if (t == null || t.isUsed) return false;
+        if (!CanUseCommToken(agent)) return false;
+        if (IsDeadZone) return t.TryRevealDeadZone();
+
+        var target = MissionManager.Instance?.CurrentTargetCard();
+        if (target == null) return false;
+        return t.TryRevealWithPosition(pos, target.suit);
+    }
+
     /// <summary>데드존 모드에서 위치 정보 없이 통신한다 (AI용).</summary>
     public bool UseCommTokenDeadZone(CrewAgent agent)
     {

@@ -224,19 +224,37 @@ public class CrewAgent : Agent
         //     1) CommunicationManager 존재
         //     2) 트릭 사이 (IsBetweenTricks) — 룰북상 트릭 진행 중엔 통신 불가
         //     3) 아직 사용하지 않음
-        //     4) 손에 비-로켓 카드 1장 이상 (공개할 카드가 있어야 함)
+        //     4) task 타깃 수트 카드 중 통신 가능한 것(Highest/Only/Lowest)이 1장 이상
+        //        (N=1 기준; N>1 확장 시 수정 필요)
+        var targetCard = MissionManager.Instance?.CurrentTargetCard();
+        var ct         = commManager?.GetCommToken(this);
+        bool hasValidTaskComm = ct != null && targetCard != null && (
+            ct.HasCardOfPosition(CommunicationToken.RevealPosition.Highest, targetCard.suit) ||
+            ct.HasCardOfPosition(CommunicationToken.RevealPosition.Only,    targetCard.suit) ||
+            ct.HasCardOfPosition(CommunicationToken.RevealPosition.Lowest,  targetCard.suit));
+
         bool canComm = commManager != null
                        && trickManager != null
                        && trickManager.IsBetweenTricks
                        && !commManager.HasUsedCommToken(this)
-                       && hand.Exists(c => c.suit != Card.Suit.Rocket);
+                       && hasValidTaskComm;
         if (!canComm)
             actionMask.SetActionEnabled(1, 1, false);
 
-        // === Branch 2: 미사용 (조난신호는 트릭 전 단계에서 별도 처리) ===
-        actionMask.SetActionEnabled(2, 1, false);
-        actionMask.SetActionEnabled(2, 2, false);
-        actionMask.SetActionEnabled(2, 3, false);
+        // === Branch 2: 통신 포지션 선택 (0=Highest, 1=Only, 2=Lowest, 3=항상마스킹) ===
+        //   공개 수트 = task 타깃 수트로 고정. 해당 수트+포지션 카드가 없으면 마스킹.
+        //   ML-Agents 요건: 각 branch에서 최소 1개는 항상 unmasked 유지.
+        //   canComm=true = hasValidTaskComm=true → 0,1,2 중 최소 1개는 unmasked 보장.
+        actionMask.SetActionEnabled(2, 3, false);   // value=3은 항상 미사용
+        if (canComm && ct != null && targetCard != null)
+        {
+            if (!ct.HasCardOfPosition(CommunicationToken.RevealPosition.Highest, targetCard.suit))
+                actionMask.SetActionEnabled(2, 0, false);
+            if (!ct.HasCardOfPosition(CommunicationToken.RevealPosition.Only, targetCard.suit))
+                actionMask.SetActionEnabled(2, 1, false);
+            if (!ct.HasCardOfPosition(CommunicationToken.RevealPosition.Lowest, targetCard.suit))
+                actionMask.SetActionEnabled(2, 2, false);
+        }
     }
 
     // ---------------------------------------------------------------
@@ -269,9 +287,16 @@ public class CrewAgent : Agent
 
         int cardIndex  = d[0];
         int commAction = d.Length > 1 ? d[1] : 0;
+        int commPos    = d.Length > 2 ? d[2] : 0;
 
         if (commAction == 1 && commManager != null)
-            commManager.UseCommToken(this);
+        {
+            // Branch2: 0=Highest, 1=Only, 2=Lowest (3은 항상 마스킹)
+            var pos = commPos == 1 ? CommunicationToken.RevealPosition.Only
+                    : commPos == 2 ? CommunicationToken.RevealPosition.Lowest
+                    :                CommunicationToken.RevealPosition.Highest;
+            commManager.UseCommTokenWithPosition(this, pos);
+        }
 
         // 범위 보정
         if (cardIndex < 0 || cardIndex >= hand.Count)

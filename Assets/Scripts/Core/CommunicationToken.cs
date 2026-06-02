@@ -70,6 +70,46 @@ public class CommunicationToken
         return true;
     }
 
+    /// <summary>
+    /// 포지션 지정 공개: task 타깃 수트(suit) + 요청 포지션에 해당하는 카드 중 가장 높은 값을 공개한다.
+    /// 해당 조건 카드가 없으면 false. 마스킹으로 사전 차단하는 것이 전제.
+    /// </summary>
+    public bool TryRevealWithPosition(RevealPosition pos, Card.Suit suit)
+    {
+        if (isUsed) return false;
+
+        Card best = null;
+        foreach (Card c in owner.hand)
+        {
+            if (c.suit == Card.Suit.Rocket) continue;
+            if (c.suit != suit) continue;
+            if (!IsValidCommunicationCard(c)) continue;
+            if (DeterminePosition(c) != pos) continue;
+            if (best == null || c.value > best.value) best = c;
+        }
+
+        if (best == null) return false;
+
+        revealedCard   = best;
+        revealPosition = pos;
+        isUsed         = true;
+        Debug.Log($"[CommToken] {owner.name} → {best.suit} {best.value} 공개 ({revealPosition}, 정책 선택)");
+        return true;
+    }
+
+    /// <summary>지정 수트+포지션에 해당하는 통신 가능 카드가 손패에 있는지 확인한다 (마스킹용).</summary>
+    public bool HasCardOfPosition(RevealPosition pos, Card.Suit suit)
+    {
+        foreach (Card c in owner.hand)
+        {
+            if (c.suit == Card.Suit.Rocket) continue;
+            if (c.suit != suit) continue;
+            if (!IsValidCommunicationCard(c)) continue;
+            if (DeterminePosition(c) == pos) return true;
+        }
+        return false;
+    }
+
     /// <summary>통신 가능 조건: 해당 무늬에서 최고값이거나, 유일하거나, 최저값이어야 한다.</summary>
     public bool IsValidCommunicationCard(Card card)
     {

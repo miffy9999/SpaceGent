@@ -87,6 +87,10 @@ public class MissionManager : MonoBehaviour
     private HashSet<Card> playedCardsInHand = new HashSet<Card>();
     public  HashSet<Card> PlayedCardsInHand => playedCardsInHand;
 
+    // 이번 핸드에서 "각 트릭을 실제로 이긴 카드"만 누적 (전역 규칙 판정용).
+    //   playedCardsInHand는 나온 카드 전부라 "무엇이 이겼나"를 못 가림 → 별도 추적.
+    private readonly List<Card> winningCardsInHand = new List<Card>();
+
     void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -116,6 +120,7 @@ public class MissionManager : MonoBehaviour
 
         // [v3 카드 메모리] 새 핸드 시작 — 이전 핸드의 played cards 비움
         playedCardsInHand.Clear();
+        winningCardsInHand.Clear();
 
         var ep = Academy.Instance.EnvironmentParameters;
         scriptedHelpers = ep.GetWithDefault("scripted_helpers", 0f) > 0.5f;
@@ -225,11 +230,11 @@ public class MissionManager : MonoBehaviour
         bool cardExch = ep.GetWithDefault("card_pass_after_first", 0f) > 0.5f;
         int  otMode   = Mathf.RoundToInt(ep.GetWithDefault("order_token_mode", 0f)); // 1숫자/2Ω/3화살표
 
-        bool any = (gr >= 1 && gr <= 9) || deadZone || disrupt > 0 || noComm || cardExch || otMode > 0;
+        bool any = (gr >= 1 && gr <= 10) || deadZone || disrupt > 0 || noComm || cardExch || otMode > 0;
         if (!any) return null;
 
         var m = new Mission { number = 0, id = "sim", totalTaskCount = taskCount, isSpecialMission = taskCount == 0 };
-        m.globalRule          = (gr >= 1 && gr <= 9) ? (GlobalMissionRule)gr : GlobalMissionRule.None;
+        m.globalRule          = (gr >= 1 && gr <= 10) ? (GlobalMissionRule)gr : GlobalMissionRule.None;
         m.hasDeadZone         = deadZone;
         m.commDisruptionTrick = disrupt;
         MissionTaskRule tr = MissionTaskRule.None;
@@ -373,6 +378,14 @@ public class MissionManager : MonoBehaviour
         if (GetCurrentPickingPlayer() != picker) return;      // 차례 아님 → 무시
         if (taskPool.Count == 0) { CompleteTaskSelection(); return; }
 
+        // ε-greedy 드래프트 탐색 오버라이드.
+        //   패스 가능한 위치(cursor<3)에서만 적용. 강제 take(cursor=3)는 건드리지 않는다.
+        //   ε=1.0이면 무조건 랜덤 take/pass → cursor별 분포 50/25/12.5/12.5.
+        //   ε=0이면 완전 정책 주도 (일반 모드).
+        float eps = Academy.Instance.EnvironmentParameters.GetWithDefault("draft_explore_eps", 0f);
+        if (eps > 0f && CanCurrentPickerPass() && UnityEngine.Random.value < eps)
+            wantPass = UnityEngine.Random.value < 0.5f;
+
         if (wantPass && CanCurrentPickerPass())
         {
             selectionCursor++;
@@ -416,7 +429,6 @@ public class MissionManager : MonoBehaviour
         tasks.Add(task);
         taskPool.RemoveAt(poolIndex);
         Debug.Log($"[Mission] {player.name} → {task} 선택");
-        RewardDraftOwnerQuality(task, player);   // 드래프트 시점 보상(B): owner 품질
     }
 
     // ---------------------------------------------------------------
@@ -529,6 +541,14 @@ public class MissionManager : MonoBehaviour
         if (isFirstTrick) firstTrickWinner = winner;
         lastTrickWinner = winner;
 
+        // 이번 트릭을 이긴 카드(승자가 낸 카드)를 누적 — 전역 규칙 판정용
+        {
+            var tmTable   = GameManager.Instance.trickManager.cardsOnTable;
+            var tmPlayers = GameManager.Instance.trickManager.playersOnTable;
+            for (int i = 0; i < tmTable.Count && i < tmPlayers.Count; i++)
+                if (tmPlayers[i] == winner) { winningCardsInHand.Add(tmTable[i]); break; }
+        }
+
         // ── 전역 미션 규칙 판정 ─────────────────────────────────────────
         if (currentMission != null && !CheckGlobalRule(currentMission.globalRule, winner, trickCards))
             return; // EndMissionFailed 이미 호출됨
@@ -592,23 +612,28 @@ public class MissionManager : MonoBehaviour
                     globalOk = CheckOmegaOnLastTrick();
                     break;
                 case GlobalMissionRule.AllRocketsMustWin:
-                    // 각 로켓이 적어도 1트릭을 이겼는지 확인
+                    // M13: 로켓 1~4가 각각 적어도 1트릭을 "이겼는지" (승리 카드 기준)
                     for (int v = 1; v <= 4 && globalOk; v++)
                     {
                         bool won = false;
-                        foreach (Card c in playedCardsInHand)
+                        foreach (Card c in winningCardsInHand)
                             if (c.suit == Card.Suit.Rocket && c.value == v) { won = true; break; }
                         if (!won) globalOk = false;
                     }
                     break;
-                case GlobalMissionRule.RocketOneWinsTwice:
-                    // 로켓-1 이 트릭에서 2번 이겼는지 (count는 TrickManager가 tracking해야 하지만 여기선 playedCards 활용)
-                    // 간소화: 로켓-1은 한번만 낼 수 있으므로 "두 번"은 게임 디자이너 의도 재해석 필요.
-                    // 현 구현: 로켓-1이 적어도 1번은 이겼으면 통과
-                    { bool r1won = false;
-                      foreach (Card c in playedCardsInHand)
-                          if (c.suit == Card.Suit.Rocket && c.value == 1) { r1won = true; break; }
-                      globalOk = r1won; }
+                case GlobalMissionRule.ColorOnesWinTwice:
+                    // M26: 색깔(비로켓) 1 값 카드가 트릭을 "정확히 2번" 이겨야 함
+                    { int ones = 0;
+                      foreach (Card c in winningCardsInHand)
+                          if (c.suit != Card.Suit.Rocket && c.value == 1) ones++;
+                      globalOk = (ones == 2); }
+                    break;
+                case GlobalMissionRule.ColorOneWins:
+                    // M9: 색깔(비로켓) 1 값 카드 한 장이 어떤 트릭이든 이겨야 함
+                    { bool oneWon = false;
+                      foreach (Card c in winningCardsInHand)
+                          if (c.suit != Card.Suit.Rocket && c.value == 1) { oneWon = true; break; }
+                      globalOk = oneWon; }
                     break;
             }
             if (!globalOk)
@@ -863,12 +888,10 @@ public class MissionManager : MonoBehaviour
                 return true;
             }
 
-            // M26: 로켓-1이 정확히 2트릭을 이겨야 함 (핸드 종료 시 판정 — 여기선 초과 감시)
-            case GlobalMissionRule.RocketOneWinsTwice:
-            {
-                // 로켓-1이 이미 2트릭 이상 이겼는지는 OnHandEnded에서 판정
+            // M26(색깔1 2회)·M9(색깔1 1회)는 승리 카드 누적으로 OnHandEnded에서 판정
+            case GlobalMissionRule.ColorOnesWinTwice:
+            case GlobalMissionRule.ColorOneWins:
                 return true;
-            }
 
             default: return true;
         }
@@ -1143,10 +1166,10 @@ public class MissionManager : MonoBehaviour
     //   레이아웃 (GetSpecialRuleObs와 일치):
     //   통신:   [0]데드존 [1]통신차단 재개트릭(/10) [2]특정인 통신불가 활성 [3]viewer가 통신금지 대상
     //   드래프트/기타: [4]사령관 결정 [5]사령관 분배 [6]순서토큰 이동 허용 [7]첫트릭후 카드교환 [8]순서토큰 존재
-    //   전역규칙 one-hot(GlobalMissionRule 1~9): [9]AllRocketsMustWin [10]NoNineWins [11]RocketOneWinsTwice
+    //   전역규칙 one-hot(GlobalMissionRule 1~10): [9]AllRocketsMustWin [10]NoNineWins [11]ColorOnesWinTwice
     //     [12]BalanceTricks [13]RocketsInOrder [14]CommanderFirstAndLast [15]OmegaOnLastTrick
-    //     [16]OnePlayerFirstFourOnly [17]LeftOfPinkNineWinsAllPink
-    //   [18]전역규칙 활성(any)  [19..31] 예비
+    //     [16]OnePlayerFirstFourOnly [17]LeftOfPinkNineWinsAllPink [18]ColorOneWins
+    //   [19]전역규칙 활성(any)  [20..31] 예비
     public const int SpecialRuleObsSize = 32;
     public float[] GetSpecialRuleObs(CrewAgent viewer)
     {
@@ -1175,12 +1198,12 @@ public class MissionManager : MonoBehaviour
         // 순서 토큰 존재 여부
         o[8] = tasks.Exists(t => t.orderToken != OrderToken.None) ? 1f : 0f;
 
-        // 전역 규칙 one-hot (1~9 → [9..17]) + 활성 플래그
+        // 전역 규칙 one-hot (1~10 → [9..18]) + 활성 플래그[19]
         int gr = m != null ? (int)m.globalRule : 0;
-        if (gr >= 1 && gr <= 9)
+        if (gr >= 1 && gr <= 10)
         {
             o[9 + (gr - 1)] = 1f;
-            o[18] = 1f;
+            o[19] = 1f;
         }
         return o;
     }

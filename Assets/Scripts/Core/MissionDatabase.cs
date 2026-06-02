@@ -61,8 +61,8 @@ public class MissionDatabase : ScriptableObject
             tokens: new[]{ OrderToken.N1, OrderToken.N2 }));
         list.Add(M( 4, tasks:  3));
 
-        // M5: 0E — 사령관이 한 명 선택, 그 사람이 트릭을 0번 이겨야 함
-        list.Add(M( 5, tasks: 1, special: true,
+        // M5: 0E — 사령관이 한 명 선택, 그 사람이 트릭을 0번 이겨야 함 (0E이므로 task 0)
+        list.Add(M( 5, tasks: 0, special: true,
             rule: MissionTaskRule.CommanderDecision));
 
         // M6: 3 태스크 + Arrow 토큰 + 데드존
@@ -75,9 +75,9 @@ public class MissionDatabase : ScriptableObject
         list.Add(M( 8, tasks: 3,
             tokens: new[]{ OrderToken.N1, OrderToken.N2, OrderToken.N3 }));
 
-        // M9: 0E — 로켓-1 카드가 트릭을 이겨야 함
-        list.Add(M( 9, tasks: 1, special: true,
-            global: GlobalMissionRule.AllRocketsMustWin));   // 실제론 Rocket-1 only, 편의상 AllRockets로 공유
+        // M9: 0E — 색깔(비로켓) 1 값 카드 한 장이 어떤 트릭이든 이겨야 함
+        list.Add(M( 9, tasks: 0, special: true,
+            global: GlobalMissionRule.ColorOneWins));
 
         list.Add(M(10, tasks:  4));
 
@@ -142,9 +142,9 @@ public class MissionDatabase : ScriptableObject
         list.Add(M(25, tasks: 5,
             tokens: new[]{ OrderToken.Arrow1, OrderToken.Arrow2 }, deadZone: true));
 
-        // M26: 0E — 로켓-1이 트릭을 2번 이겨야 함
+        // M26: 0E — 색깔(비로켓) 1 값 카드들이 트릭을 정확히 2번 이겨야 함
         list.Add(M(26, tasks: 0, special: true,
-            global: GlobalMissionRule.RocketOneWinsTwice));
+            global: GlobalMissionRule.ColorOnesWinTwice));
 
         // M27: 3 + 사령관 결정
         list.Add(M(27, tasks: 3,

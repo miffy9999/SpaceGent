@@ -57,11 +57,9 @@ environment_parameters:
           behavior: CrewAgent
           signal_smoothing: true
           min_lesson_length: 100
-          threshold: 0.05      # 천장 0.087(성공≈54%) 아래. 드래프트를 실제로 학습해야 도달
-                               # (랜덤 owner면 -0.24). 0.05≈성공 52.5%.
-                               # ※ 드래프트 shaping(MissionManager DraftShapeScale=0.3)이 그룹보상에
-                               #   더해짐 → 좋은 드래프트면 +0.3 오프셋. measure가 (2p-1)+shaping이 되므로
-                               #   학습 관찰 후 임계값 재튜닝 가능(예: 0.1~0.2).
+          threshold: 0.05      # 천장 0.087(성공≈54%) 아래. 드래프트를 실제로 학습해야 도달.
+                               # (랜덤 owner면 group reward ≈ -0.24, 0.05 ≈ 성공 52.5%)
+                               # ※ shaping 제거됨(Run6~) → measure = pure 2p-1.
         value: 1
 
       - name: Stage2_2tasks
@@ -84,6 +82,37 @@ environment_parameters:
 
       - name: Stage4_4tasks
         value: 4
+
+  # ──────────────────────────────────────────────
+  # 드래프트 ε-greedy 탐색 오버라이드 (Run6~, E 방법)
+  #   MissionManager.AgentSelectTask()에서 읽어, 패스 가능 위치(cursor<3)의 take/pass를
+  #   확률 ε으로 무시하고 랜덤 결정으로 대체한다.
+  #   목표: "사령관 항상 선점(64%)" 균형을 깨고 value function이 다양한 owner 시나리오를 학습.
+  #   ε=1.0 → cursor별 분포 ≈ 50/25/12.5/12.5 (현재 64/9/18/9 대비 대폭 다양화)
+  #   ε=0.0 → 순수 정책 주도 (기존 동작)
+  #   스케줄: progress 0→50% 구간 ε=1.0, 50→80% 구간 ε=0.5, 80→100% 구간 ε=0.0
+  #           (progress = 누적 스텝 / max_steps)
+  #
+  #   ※ DraftShapeScale(Run5 shaping)은 이 변경과 함께 완전 제거됨(AssignTask에서 호출 삭제).
+  # ──────────────────────────────────────────────
+  draft_explore_eps:
+    curriculum:
+      - name: Eps_Full
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.5
+          min_lesson_length: 10
+        value: 1.0
+      - name: Eps_Half
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.8
+          min_lesson_length: 10
+        value: 0.5
+      - name: Eps_Zero
+        value: 0.0
 
   # ──────────────────────────────────────────────
   # 특수 규칙 env 플래그 (Simulation 학습에서 켜면 합성 미션으로 적용 + 관측 노출).
