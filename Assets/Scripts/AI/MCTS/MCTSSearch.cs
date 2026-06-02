@@ -44,15 +44,23 @@ public static class MCTSSearch
         var rng  = new System.Random();
         var root = new IsNode();
 
-        // 표준 SO-ISMCTS: 매 iteration마다 결정화를 새로 샘플(신념 다양성 유지).
-        //   고정 표본 풀을 재사용하면 그 표본들에 과적합(strategy fusion)되어
-        //   budget↑가 오히려 성능을 떨어뜨림 → 매번 새로 뽑는다.
+        // SO-ISMCTS: 결정화를 K iteration마다 재샘플(신념 다양성 유지 + 비용 절감).
+        //   매번 새로 뽑으면 정확하나 백트래킹 비용이 큼. K마다 갱신하면
+        //   budget/K개 표본(예: 1000/5=200개)으로 충분히 다양 → 과적합 무시 가능하고
+        //   결정화 호출이 K배 감소(속도↑). 재사용 구간엔 값싼 복제로 변형 방지.
+        const int RedeterminizeEvery = 5;
+        List<Card>[] hands = null;
         for (int it = 0; it < budget; it++)
         {
-            var hands = Determinizer.Sample(
-                ctx.selfHand, ctx.selfIdx, ctx.playedCards, ctx.tableCards,
-                ctx.knownVoids, ctx.handSizes, rng, ctx.commReveals);
-            var state = ctx.BuildInitialState(hands);   // 새 표본이라 클론 불필요
+            if (it % RedeterminizeEvery == 0 || hands == null)
+                hands = Determinizer.Sample(
+                    ctx.selfHand, ctx.selfIdx, ctx.playedCards, ctx.tableCards,
+                    ctx.knownVoids, ctx.handSizes, rng, ctx.commReveals);
+
+            // 시뮬이 손패를 RemoveAt로 변형하므로 값싼 복제본으로 상태 구성
+            var cloned = new List<Card>[hands.Length];
+            for (int i = 0; i < hands.Length; i++) cloned[i] = new List<Card>(hands[i]);
+            var state = ctx.BuildInitialState(cloned);
             Iterate(root, state, explorationC, rng);
         }
 
