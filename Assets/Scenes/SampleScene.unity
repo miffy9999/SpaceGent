@@ -8736,6 +8736,10 @@ PrefabInstance:
       value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
+      propertyPath: cooperativeTargets
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: cardSpriteMapping
       value: 
       objectReference: {fileID: 11400000, guid: b2a092c55546dc649ba0c51339f7412b, type: 2}

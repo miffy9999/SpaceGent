@@ -51,6 +51,9 @@ public class GameManager : MonoBehaviour
     public int mctsBudget = 2000;
     [Tooltip("MCTS determinization(손패 표본) 수. 불완전정보 분산 감소.")]
     public int mctsDeterminizations = 20;
+    [Tooltip("협력 목표: 목표 카드를 owner의 손이 아니라 전체 덱에서 무작위로 뽑는다.\n" +
+             "→ 목표를 동료가 들고 있어 '흘려주기' 협력이 필요(MCTS 강점 발휘). 기본 off는 RL 보존용.")]
+    public bool cooperativeTargets = false;
 
     // 현재 AI 정책 라벨 (RL / RuleBased / MCTS) — EvalStats 태그용.
     //   AI 슬롯(players[1])이 HeuristicOnly면 aiPolicy, 아니면 RL(트레이너 구동).

@@ -1192,7 +1192,12 @@ public class MissionManager : MonoBehaviour
     //   타깃 카드는 색깔 카드 36장 중 하나(로켓 제외)이며 반드시 누군가의 손에 있다.
     private TaskCard CreateUnassignedTask(CrewAgent refPlayer, HashSet<Card> used)
     {
-        Card target = PickCardFromHand(refPlayer.hand, used) ?? PickCardFromPool(used);
+        // 협력 모드: 목표를 전체 덱(36색)에서 무작위 → 동료가 보유할 수 있어 흘려주기 협력 필요.
+        // 기본: refPlayer 손에서 우선(드래프트 순서상 owner-held가 되는 단순 모드, RL 보존).
+        var gm = GameManager.Instance;
+        Card target = (gm != null && gm.cooperativeTargets)
+            ? PickCardFromPool(used)
+            : (PickCardFromHand(refPlayer.hand, used) ?? PickCardFromPool(used));
         if (target == null) return null;
         return TaskCard.SpecificCard(target);
     }
