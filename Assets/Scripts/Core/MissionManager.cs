@@ -91,6 +91,11 @@ public class MissionManager : MonoBehaviour
     //   playedCardsInHand는 나온 카드 전부라 "무엇이 이겼나"를 못 가림 → 별도 추적.
     private readonly List<Card> winningCardsInHand = new List<Card>();
 
+    // 이번 에피소드의 task 개수(N). 드래프트 시작 시 확정.
+    //   보상 정규화(task 완수 +1/N)와 관측 노출(num_tasks/10)에 사용 → N이 달라도
+    //   에피소드 그룹 리턴 범위를 [-1,+1]에 맞춰 PPO advantage 스케일을 일정하게 유지.
+    private int currentTaskCount = 1;
+
     void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -144,10 +149,19 @@ public class MissionManager : MonoBehaviour
             // 학습(커리큘럼): task 개수 num_tasks. 특수규칙 env 플래그가 있으면 합성 미션으로 켠다
             //   (플래그가 하나도 없으면 null → 순수 트릭+드래프트 베이스, 기존 동작 그대로)
             taskCount = Mathf.RoundToInt(ep.GetWithDefault("num_tasks", 1f));
+            // Option B(혼합 학습): mix_tasks>0.5면 에피소드마다 N을 가중 샘플링한다.
+            //   가중치 N=1:40% / N=2:35% / N=3:15% / N=4:10% (낮은 N에 가중 — 희박한 보상 완화).
+            //   num_tasks 값은 무시. 커리큘럼 없이 처음부터 일반 정책을 학습하기 위함.
+            if (ep.GetWithDefault("mix_tasks", 0f) > 0.5f)
+            {
+                float r = UnityEngine.Random.value;
+                taskCount = r < 0.40f ? 1 : r < 0.75f ? 2 : r < 0.90f ? 3 : 4;
+            }
             currentMaxDifficulty = taskCount;
             currentMission = BuildSyntheticMissionFromEnv(ep, Mathf.Clamp(taskCount, 0, MaxPoolSize));
         }
         taskCount = Mathf.Clamp(taskCount, 0, MaxPoolSize);
+        currentTaskCount = Mathf.Max(1, taskCount);   // 보상 정규화/관측용 (0-task 특수미션도 1로 보호)
 
         // WinSpecificCard 태스크 풀 생성 (미배정) — 드래프트로 배정
         GenerateTaskPool(taskCount, captainIndex);
@@ -756,7 +770,9 @@ public class MissionManager : MonoBehaviour
         if (Phase == TrainingMode.Phase1_CoopSingle)
         {
             // 그룹/학습자 보상 (PPO면 player[0]에 직접, POCA면 group)
-            GameManager.Instance.AddGroupOrLearnerReward(RewardTaskComplete);
+            //   N으로 정규화 → 전부 완수 시 +1.0(N무관), 실패는 -1.0 유지(즉시 종료 신호).
+            //   에피소드 그룹 리턴을 [-1,+1]로 묶어 N별 advantage 스케일을 통일.
+            GameManager.Instance.AddGroupOrLearnerReward(RewardTaskComplete / currentTaskCount);
         }
         else
         {
@@ -1169,7 +1185,7 @@ public class MissionManager : MonoBehaviour
     //   전역규칙 one-hot(GlobalMissionRule 1~10): [9]AllRocketsMustWin [10]NoNineWins [11]ColorOnesWinTwice
     //     [12]BalanceTricks [13]RocketsInOrder [14]CommanderFirstAndLast [15]OmegaOnLastTrick
     //     [16]OnePlayerFirstFourOnly [17]LeftOfPinkNineWinsAllPink [18]ColorOneWins
-    //   [19]전역규칙 활성(any)  [20..31] 예비
+    //   [19]전역규칙 활성(any)  [20]task 개수 N(/10)  [21..31] 예비
     public const int SpecialRuleObsSize = 32;
     public float[] GetSpecialRuleObs(CrewAgent viewer)
     {
@@ -1205,6 +1221,10 @@ public class MissionManager : MonoBehaviour
             o[9 + (gr - 1)] = 1f;
             o[19] = 1f;
         }
+
+        // [20] 이번 에피소드 task 개수(N) 명시 신호 → N별 전략 전환 학습 보조.
+        //   /10 정규화(설계상 최대 10 task). 태스크 슬롯 점유로 암묵 인코딩되지만 보조 스칼라로 명시.
+        o[20] = currentTaskCount / 10f;
         return o;
     }
 

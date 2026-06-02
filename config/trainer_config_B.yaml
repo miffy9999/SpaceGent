@@ -1,0 +1,84 @@
+behaviors:
+  CrewAgent:
+    # MA-POCA: 4명을 한 팀으로 묶어 group reward + 중앙집중 critic으로 협력 학습.
+    #   GameManager가 helperHeuristicOnly가 아니면 SimpleMultiAgentGroup에 4명 등록.
+    #   (씬: 4명 모두 BehaviorType=Default)
+    #   ※ trainer_config.yaml(Option A, 커리큘럼)과 하이퍼파라미터 동일 — 비교 공정성 유지.
+    trainer_type: poca
+    hyperparameters:
+      batch_size: 256
+      buffer_size: 4096
+      learning_rate: 3.0e-4
+      beta: 0.01          # 엔트로피 계수 (협동게임은 탐색 중요)
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3
+      learning_rate_schedule: linear
+    network_settings:
+      normalize: false
+      hidden_units: 256
+      num_layers: 3
+      vis_encode_type: simple
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+    max_steps: 10000000
+    time_horizon: 128
+    summary_freq: 10000
+    keep_checkpoints: 5
+
+# ══════════════════════════════════════════════
+# Option B — 혼합 N 학습 (커리큘럼 없음).
+#   Option A(trainer_config.yaml)와의 대조군: 처음부터 N을 매 에피소드 가중 샘플링해
+#   "task 수 불변" 단일 일반 정책을 학습한다. N=1 특화 편향 회피가 목적.
+#
+#   mix_tasks=1 → MissionManager.StartTaskSelectionPhase()가 num_tasks를 무시하고
+#     N을 가중 샘플링: N=1:40% / N=2:35% / N=3:15% / N=4:10% (낮은 N 가중 = 희박보상 완화).
+#   보상은 Option A와 동일하게 정규화(완수 +1/N, 실패 -1) → 에피소드 리턴 ≈ [-1,+1].
+#   관측 [특수규칙 20]에 num_tasks/10이 들어가 정책이 N에 따라 전략을 전환할 수 있다.
+#
+#   비교 실행 예:
+#     A) mlagents-learn config/trainer_config.yaml   --run-id=run_optionA_curriculum
+#     B) mlagents-learn config/trainer_config_B.yaml --run-id=run_optionB_mixed
+# ══════════════════════════════════════════════
+environment_parameters:
+  mix_tasks: 1              # 1 = 혼합 N 샘플링 ON (Unity가 num_tasks를 무시하고 N을 가중 추출)
+  num_tasks: 1              # mix_tasks=1이면 무시됨 (안전 기본값)
+
+  # ──────────────────────────────────────────────
+  # 드래프트 ε-greedy 탐색 오버라이드 — Option A와 동일 스케줄(비교 공정성).
+  #   ε=1.0 → cursor별 take/pass 분포 다양화. ε=0.0 → 순수 정책.
+  #   스케줄: progress 0→50% ε=1.0, 50→80% ε=0.5, 80→100% ε=0.0.
+  # ──────────────────────────────────────────────
+  draft_explore_eps:
+    curriculum:
+      - name: Eps_Full
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.5
+          min_lesson_length: 10
+        value: 1.0
+      - name: Eps_Half
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.8
+          min_lesson_length: 10
+        value: 0.5
+      - name: Eps_Zero
+        value: 0.0
+
+  # ──────────────────────────────────────────────
+  # 특수 규칙 env 플래그 (Option A와 동일). 기본 0 = 순수 트릭+드래프트 베이스.
+  #   global_rule:          0 없음 / 1~10 = GlobalMissionRule
+  #                         (1 AllRocketsMustWin·2 NoNineWins·3 ColorOnesWinTwice·4 BalanceTricks·
+  #                          5 RocketsInOrder·6 CommanderFirstAndLast·7 OmegaOnLastTrick·
+  #                          8 OnePlayerFirstFourOnly·9 LeftOfPinkNineWinsAllPink·10 ColorOneWins)
+  #   order_token_mode:     0 없음 / 1 숫자(①②) / 2 Ω / 3 화살표(›››)
+  #   dead_zone:            1 = 통신 위치(최고/유일/최저) 비공개
+  #   comm_disrupt_until:   N = N번째 트릭 전까지 통신 금지 (⚡N)
+  #   no_comm_player:       1 = 특정인(사령관 왼쪽) 통신 불가 (M11)
+  #   card_pass_after_first:1 = 첫 트릭 후 카드 1장 전달 (M12)
+  # ──────────────────────────────────────────────

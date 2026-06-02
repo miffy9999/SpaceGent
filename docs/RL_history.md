@@ -158,6 +158,31 @@
   - 확인 포인트: cursor 분포 50/25/12/12 수렴 여부 (ε 오버라이드 작동 검증) / ε=0 구간(80%~)에서 사령관 패스+타깃 보유자 take 패턴 출현 / assignee_success 38%→~55%? / Lesson 0→1 진급?
   - 분석 도구: `Result/logs_analysis/analyze_logs.py build_vector313_draftE`
 
+## Run 7 — 멀티-task 정규화 + 두 전략 병렬 (A: 커리큘럼 / B: 혼합)
+
+- **시작**: 2026-06-02 · 빌드 대기 · 커밋(코드) 작업분
+- **빌드 상태**: 관측 313·액션 [10,2,4] **불변**(예비 슬롯 재사용). **C# 3곳 + YAML 2개.**
+  1. **보상 정규화** (`MissionManager.CompleteTask`) — task 완수 보상을 `+1 → +1/N`으로 정규화(`currentTaskCount`).
+     실패 -1은 유지(즉시 종료 신호). 전부 완수 시 +1.0(N무관) → 에피소드 리턴 범위 ≈ [-1,+1].
+  2. **N 관측 노출** (`MissionManager.GetSpecialRuleObs`) — 특수규칙 obs `[20] = N/10`. 정책의 N별 전략 전환 보조.
+  3. **혼합 N 샘플링** (`MissionManager.StartTaskSelectionPhase`) — env `mix_tasks=1`이면 N을 가중 추출
+     (N=1:40%/2:35%/3:15%/4:10%). Option B 트리거.
+  4. **YAML**: (A) `trainer_config.yaml` num_tasks 커리큘럼을 `measure: reward → progress`로 전환
+     (Stage 경계 0.30/0.55/0.78, ε 스케줄과 정렬). (B) `trainer_config_B.yaml` 신규 = `mix_tasks:1` 고정.
+- **실행**:
+  - A) `mlagents-learn config/trainer_config.yaml   --env=<새빌드> --run-id=run_optionA_curriculum`
+  - B) `mlagents-learn config/trainer_config_B.yaml --env=<새빌드> --run-id=run_optionB_mixed`
+- **목적 (왜)**: N=1만으론 연구 결과 불가 → 멀티-task 일반화 필요. 두 병목을 먼저 제거:
+  - (a) **보상 스케일 불일치** — 비정규화 시 N=4 리턴이 N=1의 4배 → advantage 스케일 N의존. `/N` 정규화로 통일.
+  - (b) **measure=reward 비단조 + 도달불가** — `ceiling_sim.py` 재측정(정규화): N=1 +0.087 / N=2 **-0.355** / N=3 **-0.575** / N=4 **-0.674**.
+    정규화로 "N↑→리턴↑" 병리는 해소(이제 단조 감소)됐으나, N≥2 천장이 음수 + ε이 리턴을 더 끌어내려 **양수 reward threshold는 도달 불가** 확정.
+    → Option A는 `progress` 기반 진급으로 전환(커리큘럼 정지 방지). Option B는 커리큘럼 자체를 제거하고 혼합 N으로 일반 정책 직접 학습.
+  - coop 휴리스틱은 N≥2 조율이 약해 위 천장을 **과소평가** → 팀원 MCTS 천장이 실제 상한. 확정되면 A의 N≥2 단계를 reward+음수threshold로 되돌릴 수 있음.
+- **결과 분석**: _(학습 종료 후 작성)_
+  - 확인 포인트: A/B 모두 N별 미션 성공률 추이 / 통신 토큰 사용률이 N↑에서 유의미하게 증가하는가 /
+    A의 progress 진급이 ε 스케줄과 어긋나지 않는가 / B가 N=1 특화 편향 없이 전 N에서 균형 잡힌 성능을 내는가.
+  - 분석 도구: `Result/logs_analysis/analyze_logs.py <run-id>`
+
 ---
 
 ## 종합 분석 (Run 1~5)
@@ -200,11 +225,12 @@
 
 > 위 회차 결과를 보고 하나 골라 학습 → 새 Run으로 승격(목적·결과 작성) → 이 목록 갱신. 상세 근거: [`ceiling.md`](ceiling.md) §7
 >
-> **현재 상황**: E(Run6) 빌드·실행 대기.
+> **현재 상황**: E(Run6) 빌드·실행 대기. 멀티-task 정규화 2전략(Run7 A/B) 빌드 대기.
 
 - **(E) 드래프트 ε-greedy 탐색** ← **Run6 `build_vector313_draftE`로 승격(빌드 대기)**
-- **(F) 멀티-task shaping 스케일링(1/N 또는 캡)** — *왜*: N개 task면 배정마다 ±scale → 고-N에서 종단 ±1을 압도. **Stage2 진급 후** 필요(현재는 미적용).
-- **(보류) (A) 보상 이진화** — *왜 보류*: N=1에선 이미 이진(정체 무관), N≥2에선 보상 희소화로 학습 불리. measure=reward 비단조 문제는 별도(수동 lesson 제어 등)로.
+- **(G) 멀티-task 정규화 + 2전략 병렬** ← **Run7로 승격(빌드 대기)**. 완수 +1/N, N관측[20], Option A(progress 커리큘럼)/B(혼합 N).
+- ~~**(F) 멀티-task shaping 스케일링(1/N)**~~ → 종단 보상 정규화(완수 +1/N)로 대체·해결(Run7). shaping 자체는 Run5에서 기각됨.
+- **(보류) (A) 보상 이진화** — *왜 보류*: `/N` 정규화로 measure 비단조 문제는 해소(N↑→리턴↓ 단조)되어 당장 불필요. N≥2 천장이 음수라 reward-threshold 대신 progress 진급 사용. MCTS 천장 확정 후 reward+음수threshold로 복귀 검토.
 - **(장기) 드래프트 단계 정보공유/통신** — *왜*: 부분관측 천장 55% → 완전정보 92% 갭은 *정보* 문제. 드래프트 전 정보 공유 수단이 있어야 55% 너머로 감(현재 통신은 플레이 중에만 가능).
 - ~~**(B) 드래프트 shaping**~~ → Run5에서 기각. shaping 신호가 있어도 탐색 없으면 효과 없음.
 - ~~**(D) shaping anneal**~~ → B 실패로 불필요.

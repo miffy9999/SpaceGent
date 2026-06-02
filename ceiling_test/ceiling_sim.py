@@ -304,12 +304,15 @@ def coop_choice_multi(pidx, hand, lead, table_cards, table_players, owner_of, un
 
 
 def play_episode_multi(hands, assign):
-    """그룹 리턴 반환: task당 ±1, 첫 실패 시 즉시 종료. 전부 성공 여부도 반환."""
+    """그룹 리턴 반환: task 완수 +1/N, 첫 실패 시 -1 즉시 종료. 전부 성공 여부도 반환.
+    Unity MissionManager와 동일하게 완수 보상을 N으로 정규화(전부 완수 → +1.0, N무관).
+    실패 패널티(-1)는 정규화하지 않음(즉시 종료 신호)."""
     hands = [list(h) for h in hands]
     owner_of = dict(assign)
     unresolved = set(assign.keys())
+    n_tasks = max(1, len(owner_of))   # 정규화 분모
     lead_player = commander_of(hands)
-    ret = 0
+    ret = 0.0
     for _ in range(10):
         lead = None
         table_cards, table_players = [], []
@@ -327,7 +330,7 @@ def play_episode_multi(hands, assign):
         fail = False
         for t in present:
             if owner_of[t] == winner:
-                ret += 1
+                ret += 1.0 / n_tasks
                 unresolved.discard(t)
             else:
                 fail = True
@@ -395,19 +398,21 @@ def main():
         print(f"     threshold={th:>4}: {pct(rate)}{marker}")
     print(f"   → 자기손패 드래프트 최고: {pct(best[0])} (threshold={best[1]})\n")
 
-    # ── 다중 task(N=1~4) 천장: 평균 그룹 리턴(=커리큘럼 measure)과 미션 성공률 ──
+    # ── 다중 task(N=1~4) 천장: 정규화 평균 그룹 리턴(=커리큘럼 measure)과 미션 성공률 ──
+    #   보상 정규화(완수 +1/N, 실패 -1)로 리턴이 N↑→단조 감소. N≥2 천장이 음수가 되어
+    #   양수 reward threshold는 도달 불가 → Option A 커리큘럼은 measure: progress로 전환했음.
     th = best[1] or 6.0
-    print(f"[다중 task 천장] coop + self-hand draft (threshold={th}) — 근사")
-    print(f"   {'N':>2} {'평균리턴(measure)':>16} {'미션성공률':>10}   (현 yaml threshold)")
-    cur_th = {1: 0.6, 2: 0.8, 3: 1.0, 4: None}
+    print(f"[다중 task 천장] coop + self-hand draft (threshold={th}) — 정규화(완수 +1/N)")
+    print(f"   {'N':>2} {'평균리턴(measure)':>16} {'미션성공률':>10}   (옛 reward threshold)")
+    cur_th = {1: 0.05, 2: 0.0, 3: 0.05, 4: None}   # 정규화 전 yaml 잠정치 — 참고용
     for nt in (1, 2, 3, 4):
         mret, msucc = run_multi(n, nt, th, rng)
         cur = cur_th[nt]
         flag = ""
         if cur is not None:
-            flag = "  ✗ 도달불가" if cur > mret else "  ○ 도달가능"
-        print(f"   {nt:>2} {mret:>16.3f} {pct(msucc):>10}   (yaml={cur}){flag}")
-    print("   ※ 평균리턴 < yaml threshold 면 그 스테이지를 영원히 못 넘음.\n")
+            flag = "  ✗ reward로는 도달불가" if cur > mret else "  ○ 도달가능"
+        print(f"   {nt:>2} {mret:>16.3f} {pct(msucc):>10}   (옛yaml={cur}){flag}")
+    print("   ※ N≥2 천장이 음수 → 양수 reward threshold 무용. 현재 Option A는 progress 기반 진급.\n")
 
     print("─" * 60)
     print("해석 가이드:")
