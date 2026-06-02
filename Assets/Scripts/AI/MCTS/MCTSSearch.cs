@@ -44,19 +44,15 @@ public static class MCTSSearch
         var rng  = new System.Random();
         var root = new IsNode();
 
-        // 결정화 비용 절감: dets개 표본을 미리 뽑아 iteration마다 순환 사용
-        //   (트리는 하나로 공유 — 핵심 이점 유지. 매 iter 새 백트래킹 비용 회피)
-        int detCount = Mathf.Max(1, determinizations);
-        var pool = new List<Card>[detCount][];
-        for (int d = 0; d < detCount; d++)
-            pool[d] = Determinizer.Sample(
-                ctx.selfHand, ctx.selfIdx, ctx.playedCards, ctx.tableCards,
-                ctx.knownVoids, ctx.handSizes, rng, ctx.commReveals);
-
+        // 표준 SO-ISMCTS: 매 iteration마다 결정화를 새로 샘플(신념 다양성 유지).
+        //   고정 표본 풀을 재사용하면 그 표본들에 과적합(strategy fusion)되어
+        //   budget↑가 오히려 성능을 떨어뜨림 → 매번 새로 뽑는다.
         for (int it = 0; it < budget; it++)
         {
-            var hands = pool[it % detCount];
-            var state = ctx.BuildInitialStateCloningHands(hands);
+            var hands = Determinizer.Sample(
+                ctx.selfHand, ctx.selfIdx, ctx.playedCards, ctx.tableCards,
+                ctx.knownVoids, ctx.handSizes, rng, ctx.commReveals);
+            var state = ctx.BuildInitialState(hands);   // 새 표본이라 클론 불필요
             Iterate(root, state, explorationC, rng);
         }
 
@@ -199,15 +195,6 @@ public class MCTSContext
             selfIdx         = selfIdx,
         };
         return s;
-    }
-
-    // 풀의 손패를 재사용하므로(매 iteration 시뮬이 RemoveAt로 변형) 깊은 복제본으로 상태 구성.
-    public MCTSState BuildInitialStateCloningHands(List<Card>[] sourceHands)
-    {
-        var cloned = new List<Card>[sourceHands.Length];
-        for (int i = 0; i < sourceHands.Length; i++)
-            cloned[i] = new List<Card>(sourceHands[i]);
-        return BuildInitialState(cloned);
     }
 }
 
