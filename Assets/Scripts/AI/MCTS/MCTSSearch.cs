@@ -15,7 +15,7 @@ using UnityEngine;
 // =====================================================================
 public static class MCTSSearch
 {
-    public const float DefaultExplorationC = 1.0f;    // C=0.4<0.7 확인 → 탐색 비중↑가 유리. 1.0 테스트
+    public const float DefaultExplorationC = 0.7f;    // C 스윕 결과 정점(0.4·1.0보다 우월): 0.7 확정
     public const int   DefaultDeterminizations = 10;
     public const int   DefaultBudget = 1000;
 
