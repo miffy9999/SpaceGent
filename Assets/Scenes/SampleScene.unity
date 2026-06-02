@@ -8725,7 +8725,7 @@ PrefabInstance:
       objectReference: {fileID: 1665506423}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: mctsBudget
-      value: 1000
+      value: 3000
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: evalLogEvery
