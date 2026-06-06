@@ -142,6 +142,10 @@ public static class MCTSRollout
         int cur = s.currentPlayer;
         var hand = s.hands[cur];
 
+        // 모든 feedable 목표(동료 보유 + owner가 그 무늬 보장승리 카드 보유)를 모아,
+        // owner의 승리 카드가 '가장 약한(WinStrength 최소)' feed를 우선한다.
+        //   → 강한 카드·로켓은 나중을 위해 보존, 확실한 feed부터 처리.
+        int pickIdx = -1, pickScore = int.MaxValue;
         foreach (var t in s.tasks)
         {
             if (t.completed || t.failed || t.ownerIdx != cur || t.target == null) continue;
@@ -150,9 +154,8 @@ public static class MCTSRollout
             int holder = TargetHolder(s, t.target);
             if (holder < 0 || holder == cur) continue;     // 동료가 들고 있어야 feeding
 
-            // T의 무늬 S에서 내 보장승리 카드 중 가장 강한 것을 리드
+            // T의 무늬 S에서 내 보장승리 카드(보통 그 무늬 최고값) 탐색
             Card.Suit suitS = t.target.suit;
-            int bestIdx = -1, bestScore = int.MinValue;
             foreach (int i in legal)
             {
                 var c = hand[i];
@@ -160,11 +163,10 @@ public static class MCTSRollout
                 if (IsAnyPendingTarget(s, c)) continue;     // 목표 카드 자체는 보존
                 if (!LeadGuaranteesWin(s, c)) continue;
                 int sc = s.WinStrength(c);
-                if (sc > bestScore) { bestScore = sc; bestIdx = i; }
+                if (sc < pickScore) { pickScore = sc; pickIdx = i; }
             }
-            if (bestIdx >= 0) return bestIdx;
         }
-        return -1;
+        return pickIdx;
     }
 
     private static bool HandContains(List<Card> hand, Card card)
