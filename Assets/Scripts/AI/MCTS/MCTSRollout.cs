@@ -62,9 +62,11 @@ public static class MCTSRollout
         int leadIdx = TryLeadOwnTargetIfWinning(s, legal);
         if (leadIdx >= 0) return leadIdx;
 
-        // [폐기] 셋업(stall) 플레이: 보장승리로 트릭을 따 리드 유지를 시도했으나
-        //   동료가 같은 무늬 목표를 강제로 내며 가로채기 유발 → 39%→33.5% 악화.
-        //   순수 MCTS+휴리스틱 롤아웃의 천장(~39%)을 못 넘어 제거.
+        // 3.5) 능동 feeding: 내 목표 T를 동료가 들고 있으면, T의 무늬 S에서
+        //      내 보장승리 카드를 리드 → 동료가 그 트릭에 T를 흘려(release) 완수.
+        //      (동료의 feeding은 TryReleaseTeammateTarget이 처리)
+        int feedIdx = TryLeadToFeedTeammate(s, legal);
+        if (feedIdx >= 0) return feedIdx;
 
         // 4) 미완료 목표 카드(내 것 + 동료 것 전부)는 함부로 버리지 않는다.
         //    동료 목표를 throwaway로 내면 낭비/가로채기로 이어져 미션 실패 위험.
@@ -127,6 +129,63 @@ public static class MCTSRollout
                     return i;
             }
         }
+        return -1;
+    }
+
+    // 능동 feeding: 내 목표 T를 동료가 들고 있을 때, T의 무늬 S에서 내가 가진
+    //   "보장 승리" 카드를 리드한다. → 동료가 그 트릭에 T를 흘려(release) 내가 완수.
+    //   안전: LeadGuaranteesWin이면 아무도 못 이기므로(void+로켓 보유자 있으면 false라 회피)
+    //         가로채기 위험 없이 내가 그 트릭을 가져감.
+    private static int TryLeadToFeedTeammate(MCTSState s, List<int> legal)
+    {
+        if (s.cardsOnTable.Count != 0) return -1;   // 리드만
+        int cur = s.currentPlayer;
+        var hand = s.hands[cur];
+
+        foreach (var t in s.tasks)
+        {
+            if (t.completed || t.failed || t.ownerIdx != cur || t.target == null) continue;
+            if (HandContains(hand, t.target)) continue;   // 내가 들고 있으면 별도 케이스(위에서 처리)
+
+            int holder = TargetHolder(s, t.target);
+            if (holder < 0 || holder == cur) continue;     // 동료가 들고 있어야 feeding
+
+            // T의 무늬 S에서 내 보장승리 카드 중 가장 강한 것을 리드
+            Card.Suit suitS = t.target.suit;
+            int bestIdx = -1, bestScore = int.MinValue;
+            foreach (int i in legal)
+            {
+                var c = hand[i];
+                if (c.suit != suitS) continue;
+                if (IsAnyPendingTarget(s, c)) continue;     // 목표 카드 자체는 보존
+                if (!LeadGuaranteesWin(s, c)) continue;
+                int sc = s.WinStrength(c);
+                if (sc > bestScore) { bestScore = sc; bestIdx = i; }
+            }
+            if (bestIdx >= 0) return bestIdx;
+        }
+        return -1;
+    }
+
+    private static bool HandContains(List<Card> hand, Card card)
+    {
+        foreach (var c in hand) if (c.Equals(card)) return true;
+        return false;
+    }
+
+    private static bool IsAnyPendingTarget(MCTSState s, Card card)
+    {
+        foreach (var t in s.tasks)
+            if (!t.completed && !t.failed && t.target != null && t.target.Equals(card)) return true;
+        return false;
+    }
+
+    // card를 손에 든 플레이어 인덱스 (결정화 상태이므로 유일하게 결정됨, 없으면 -1)
+    private static int TargetHolder(MCTSState s, Card card)
+    {
+        for (int p = 0; p < s.hands.Length; p++)
+            foreach (var c in s.hands[p])
+                if (c.Equals(card)) return p;
         return -1;
     }
 

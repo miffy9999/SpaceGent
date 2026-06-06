@@ -8713,7 +8713,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: aiPolicy
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: playMode
@@ -8725,7 +8725,7 @@ PrefabInstance:
       objectReference: {fileID: 1665506423}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: mctsBudget
-      value: 3000
+      value: 1000
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: evalLogEvery
@@ -8734,10 +8734,6 @@ PrefabInstance:
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: overrideNumTasks
       value: 2
-      objectReference: {fileID: 0}
-    - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
-      propertyPath: cooperativeTargets
-      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: cardSpriteMapping
@@ -8751,6 +8747,10 @@ PrefabInstance:
       propertyPath: taskSpriteMapping
       value: 
       objectReference: {fileID: 11400000, guid: 45b5e419c86117445b427a57d04c2693, type: 2}
+    - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
+      propertyPath: cooperativeTargets
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7657092473166672590, guid: 592debad500fd3c4a87f9828cc39913f, type: 3}
       propertyPath: mctsDeterminizations
       value: 10
