@@ -19,6 +19,7 @@
 |------|------|
 | **Haetae** | Unity — 게임 로직, 씬, UI, 에디터 스크립트 |
 | **팀원** | Python — ML-Agents 학습 설정, trainer config, 결과 분석 |
+| **MCTS 담당** | Unity C# — MCTS 협력 AI (SO-ISMCTS) 알고리즘 설계 및 구현 |
 
 - Unity 작업: `Assets/` 폴더 전반
 - Python 작업: `config/` (trainer yaml), `results/` (학습 결과), TensorBoard 분석
@@ -33,6 +34,7 @@
   - 순서 토큰: 번호(1·2·3·Ω)·화살표 토큰 순서대로 달성, 위반 시 즉시 미션 실패
   - **무선통신 토큰**: 미션당 1회, 트릭 사이에만 사용. 자기 카드 1장을 공개하고 최고/유일/최저 위치 표시 (로켓 불가)
   - **조난신호**: 첫 트릭 전, 로켓을 제외한 카드 1장을 인접 플레이어에게 전달
+- **MCTS 협력 AI**: SO-ISMCTS 기반 탐색 트리, 신념 결정화 및 능동 feeding(협력 롤아웃)을 통해 순수 탐색만으로 높은 미션 성공률 달성
 - **미션 1~50 전체 정의**: `MissionDatabase.BuildAllMissions()`가 태스크 수·순서 토큰·특수 규칙을 코드로 정의
   - **전역 미션 규칙**: 9 트릭 금지, 로켓 오름차순, 2트릭 차 금지, 로켓당 1트릭, 사령관 첫·마지막 등 (`GlobalMissionRule`)
   - **통신 특수 규칙**: 데드존(위치 비공개), 통신 차단(⚡N 트릭 전 금지), 특정인 통신 불가 (`MissionTaskRule`)
@@ -65,7 +67,14 @@ SpaceGent/
 │   │   └── Player Agent.prefab        # CrewAgent + BehaviorParameters + DecisionRequester
 │   └── Scripts/
 │       ├── AI/
-│       │   └── CrewAgent.cs           # ML-Agents 에이전트 + 인간 입력 처리
+│       │   ├── CrewAgent.cs           # ML-Agents 에이전트 + 인간 입력 + 정책 dispatch(RL/MCTS/Rule)
+│       │   ├── RuleBasedHelper.cs     # 규칙 기반(HFSM) 협력 정책 + 평가 통계
+│       │   ├── EvalStats.cs           # 미션 성공률/평균 완수율 누적 콘솔 로그
+│       │   └── MCTS/                  # 협력 MCTS (SO-ISMCTS)
+│       │       ├── MCTSSearch.cs      # SO-ISMCTS 본체(카드키 공유 트리) + MCTSContext
+│       │       ├── MCTSState.cs       # 결정화 게임 상태(다중 태스크/전역규칙) + MctsTask
+│       │       ├── MCTSRollout.cs     # 협력 롤아웃 정책(목표 claim/양보/능동 feeding)
+│       │       └── Determinizer.cs    # 신념 결정화(void+통신 제약, MCV 백트래킹)
 │       ├── Core/
 │       │   ├── Card.cs                # 카드 데이터 (수트 4종 + 로켓, 값 기반 동등성)
 │       │   ├── CardDisplay.cs         # 3D 카드 비주얼
@@ -80,7 +89,8 @@ SpaceGent/
 │       │   ├── HandCardUI.cs          # 손패 카드 버튼 (클릭 → SelectCard)
 │       │   ├── Mission.cs             # 미션 데이터 (번호, 태스크 수, 순서토큰, 전역/통신 특수규칙)
 │       │   ├── MissionDatabase.cs     # 미션 1~50 코드 정의 + ScriptableObject 컬렉션
-│       │   ├── MissionManager.cs      # 태스크 선택 + 트릭 판정 + 전역규칙 + 보상 + 미션 진행
+│       │   ├── MissionManager.cs      # 태스크 선택 + 트릭 판정 + 전역규칙 + 보상 + MCTS 컨텍스트 빌드
+│       │   ├── MissionRules.cs        # 규칙 순수함수(Beats/승자/전역규칙) — 실게임·MCTS 공용
 │       │   ├── TaskCard.cs            # WinSpecificCard 태스크(targetCard) + 순서 토큰(OrderToken)
 │       │   ├── TaskSpriteMapping.cs   # 태스크 → Sprite 매핑 ScriptableObject
 │       │   └── TrickManager.cs        # 게임 흐름 제어 + 트릭 로직 + Watchdog
