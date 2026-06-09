@@ -115,7 +115,7 @@ public class CrewAgent : Agent
             {
                 if (ShouldUseMCTS())
                 {
-                    // MCTS: 모든 AI(도우미 포함)가 PIMC 탐색으로 협력 플레이
+                    // MCTS: 모든 AI(도우미 포함)가 SO-ISMCTS 탐색으로 협력 플레이
                     idx = DecideWithMCTS(mm);
                 }
                 else

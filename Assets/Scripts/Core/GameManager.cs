@@ -29,13 +29,13 @@ public class GameManager : MonoBehaviour
     public enum HeuristicPolicy
     {
         RuleBased,    // 규칙 기반 휴리스틱 (HFSM)
-        MCTS,         // PIMC 몬테카를로 트리 탐색
+        MCTS,         // SO-ISMCTS 정보집합 몬테카를로 트리 탐색
     }
 
     [Header("AI 정책 (BehaviorType=HeuristicOnly 에이전트에 적용)")]
     [Tooltip("RL 학습은 BehaviorType=Default + 트레이너가 구동(이 설정 무관).\n" +
              "HeuristicOnly 에이전트는 이 정책으로 카드를 결정한다.\n" +
-             "MCTS: 모든 AI(도우미 포함)가 PIMC 탐색으로 협력 플레이.")]
+             "MCTS: 모든 AI(도우미 포함)가 SO-ISMCTS 탐색으로 협력 플레이.")]
     public HeuristicPolicy aiPolicy = HeuristicPolicy.RuleBased;
 
     [Header("평가 (미션 성공률 누적 콘솔 로그)")]
