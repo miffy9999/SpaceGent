@@ -275,6 +275,11 @@ tensorboard --logdir results/
 | `mctsDeterminizations` | `10` | 결정화 수 |
 | `evaluationLogging` | `true` | EvalStats 콘솔 출력 |
 
+### 참고 문서
+
+- [docs/MCTS_Cooperative_AI.md](docs/MCTS_Cooperative_AI.md) — 알고리즘 동작 상세(결정화·공유트리·협력 롤아웃)
+- [docs/MCTS_DESIGN_NOTES.md](docs/MCTS_DESIGN_NOTES.md) — 의사결정 기록·벤치마크 전체 수치·되돌린 실험·규칙 구현 범위
+
 ---
 
 ## Unity 씬 설정 [Unity 담당]
