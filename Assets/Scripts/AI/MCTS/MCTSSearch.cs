@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
 
 // =====================================================================
@@ -18,6 +19,31 @@ public static class MCTSSearch
     public const float DefaultExplorationC = 0.7f;    // C 스윕 결과 정점(0.4·1.0보다 우월): 0.7 확정
     public const int   DefaultDeterminizations = 10;
     public const int   DefaultBudget = 1000;
+
+    // ── 타이밍 누산기 (세션 전체 누적) ──────────────────────────────
+    private static int  _decisionCount;
+    private static long _totalIterations;   // 누적 계산(iteration) 횟수
+    private static long _totalDetCalls;     // 누적 결정화 호출 횟수
+    private static long _totalDecisionMs;
+    private static long _totalDetMs;
+    private static long _totalRolloutMs;
+    private static long _minDecisionMs = long.MaxValue;
+    private static long _maxDecisionMs;
+
+    // ChooseCard 1회 동안 Iterate()가 누산 (ticks 단위)
+    private static long _callRolloutTicks;
+
+    private const int SummaryEvery = 10;   // N회마다 누적 평균 출력
+
+    // 외부(GameManager 등)에서 새 판 시작 시 호출해 통계 초기화
+    public static void ResetStats()
+    {
+        _decisionCount = 0;
+        _totalIterations = _totalDetCalls = 0;
+        _totalDecisionMs = _totalDetMs = _totalRolloutMs = 0;
+        _minDecisionMs = long.MaxValue;
+        _maxDecisionMs = 0;
+    }
 
     // ── ISMCTS 노드: 카드(int 키) 기준 자식 ─────────────────────────
     private class IsNode
@@ -44,6 +70,12 @@ public static class MCTSSearch
         var rng  = new System.Random();
         var root = new IsNode();
 
+        _callRolloutTicks = 0;
+        long detTicks    = 0;
+        int  detCalls    = 0;
+        long freq = Stopwatch.Frequency;
+        var totalSw = Stopwatch.StartNew();
+
         // SO-ISMCTS: 결정화를 K iteration마다 재샘플(신념 다양성 유지 + 비용 절감).
         //   매번 새로 뽑으면 정확하나 백트래킹 비용이 큼. K마다 갱신하면
         //   budget/K개 표본(예: 1000/5=200개)으로 충분히 다양 → 과적합 무시 가능하고
@@ -53,15 +85,66 @@ public static class MCTSSearch
         for (int it = 0; it < budget; it++)
         {
             if (it % RedeterminizeEvery == 0 || hands == null)
+            {
+                long t0 = Stopwatch.GetTimestamp();
                 hands = Determinizer.Sample(
                     ctx.selfHand, ctx.selfIdx, ctx.playedCards, ctx.tableCards,
                     ctx.knownVoids, ctx.handSizes, rng, ctx.commReveals);
+                detTicks += Stopwatch.GetTimestamp() - t0;
+                detCalls++;
+            }
 
             // 시뮬이 손패를 RemoveAt로 변형하므로 값싼 복제본으로 상태 구성
             var cloned = new List<Card>[hands.Length];
             for (int i = 0; i < hands.Length; i++) cloned[i] = new List<Card>(hands[i]);
             var state = ctx.BuildInitialState(cloned);
             Iterate(root, state, explorationC, rng);
+        }
+
+        totalSw.Stop();
+        long totalMs   = totalSw.ElapsedMilliseconds;
+        long detMs     = detTicks   * 1000L / freq;
+        long rolloutMs = _callRolloutTicks * 1000L / freq;
+        long treeMs    = System.Math.Max(0L, totalMs - detMs - rolloutMs);
+
+        // 누산
+        _decisionCount++;
+        _totalIterations += budget;
+        _totalDetCalls   += detCalls;
+        _totalDecisionMs += totalMs;
+        _totalDetMs      += detMs;
+        _totalRolloutMs  += rolloutMs;
+        if (totalMs < _minDecisionMs) _minDecisionMs = totalMs;
+        if (totalMs > _maxDecisionMs) _maxDecisionMs = totalMs;
+
+        // 결정당 로그
+        float pDet  = totalMs > 0 ? detMs     * 100f / totalMs : 0f;
+        float pRoll = totalMs > 0 ? rolloutMs * 100f / totalMs : 0f;
+        float pTree = totalMs > 0 ? treeMs    * 100f / totalMs : 0f;
+        float iterAvgMs = budget > 0 ? totalMs / (float)budget : 0f;
+        UnityEngine.Debug.Log(
+            $"[MCTS] P{ctx.selfIdx} 결정 #{_decisionCount} | {totalMs}ms | " +
+            $"계산:{budget}회 Det호출:{detCalls}회 | " +
+            $"Det:{detMs}ms({pDet:F0}%) Rollout:{rolloutMs}ms({pRoll:F0}%) Tree:{treeMs}ms({pTree:F0}%) | " +
+            $"iter평균:{iterAvgMs:F3}ms");
+
+        // N회 평균 요약
+        if (_decisionCount % SummaryEvery == 0)
+        {
+            float avgTotal   = _totalDecisionMs / (float)_decisionCount;
+            float avgDet     = _totalDetMs      / (float)_decisionCount;
+            float avgRollout = _totalRolloutMs  / (float)_decisionCount;
+            float avgTree    = avgTotal - avgDet - avgRollout;
+            float aDet  = avgTotal > 0 ? avgDet     / avgTotal * 100f : 0f;
+            float aRoll = avgTotal > 0 ? avgRollout / avgTotal * 100f : 0f;
+            float aTree = avgTotal > 0 ? avgTree    / avgTotal * 100f : 0f;
+            float aIter = budget   > 0 ? avgTotal   / budget          : 0f;
+            float avgDetCalls = _totalDetCalls / (float)_decisionCount;
+            UnityEngine.Debug.Log(
+                $"[MCTS 평균 {_decisionCount}회] 결정:{avgTotal:F1}ms | " +
+                $"총계산:{_totalIterations}회 Det총호출:{_totalDetCalls}회(결정당 {avgDetCalls:F1}회) | " +
+                $"Det:{avgDet:F1}ms({aDet:F0}%) Rollout:{avgRollout:F1}ms({aRoll:F0}%) Tree:{avgTree:F1}ms({aTree:F0}%) | " +
+                $"iter:{aIter:F3}ms | 범위:{_minDecisionMs}~{_maxDecisionMs}ms");
         }
 
         // 루트에서 가장 많이 방문된 카드 선택 → self 손패 인덱스로 매핑
@@ -138,8 +221,10 @@ public static class MCTSSearch
             path.Add(node);
         }
 
-        // Simulation
+        // Simulation — rollout 시간 누산
+        long rt0 = Stopwatch.GetTimestamp();
         float reward = state.IsTerminal() ? state.Reward() : MCTSRollout.Rollout(state);
+        _callRolloutTicks += Stopwatch.GetTimestamp() - rt0;
 
         // Backprop
         foreach (var n in path) { n.visits++; n.reward += reward; }
