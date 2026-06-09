@@ -16,7 +16,8 @@ public class CrewAgent : Agent
     [Header("카드 프리팹 (중앙 테이블 스폰용)")]
     public GameObject cardPrefab;
 
-    private int pendingCommAction = 0;
+    private int  pendingCommAction = 0;
+    private bool _canCommThisStep  = false; // WriteDiscreteActionMask → OnActionReceived 전달용
 
     private TrickManager         trickManager => GameManager.Instance.trickManager;
     private CommunicationManager commManager  => GameManager.Instance.communicationManager;
@@ -238,6 +239,7 @@ public class CrewAgent : Agent
                        && trickManager.IsBetweenTricks
                        && !commManager.HasUsedCommToken(this)
                        && hasValidTaskComm;
+        _canCommThisStep = canComm;
         if (!canComm)
             actionMask.SetActionEnabled(1, 1, false);
 
@@ -288,6 +290,13 @@ public class CrewAgent : Agent
         int cardIndex  = d[0];
         int commAction = d.Length > 1 ? d[1] : 0;
         int commPos    = d.Length > 2 ? d[2] : 0;
+
+        // ε-greedy 통신 강제 — draft_explore_eps와 동일 패턴.
+        //   _canCommThisStep=true(마스킹에서 통신 허용된 상태)이고 에이전트가 스킵(0)을 선택했을 때,
+        //   확률 comm_explore_eps로 강제 사용(1)으로 전환. Branch2(포지션)는 정책 유지.
+        float commEps = Academy.Instance.EnvironmentParameters.GetWithDefault("comm_explore_eps", 0f);
+        if (commEps > 0f && commAction == 0 && _canCommThisStep && UnityEngine.Random.value < commEps)
+            commAction = 1;
 
         if (commAction == 1 && commManager != null)
         {

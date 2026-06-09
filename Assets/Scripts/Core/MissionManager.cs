@@ -77,6 +77,8 @@ public class MissionManager : MonoBehaviour
     private bool  scriptedHelpers;        // 도우미를 rule-based로 override (협력 베이스라인)
     private bool  epTargetHeldByAssignee; // 이번 에피소드 타깃 카드를 담당자가 보유했는가(계측용)
     private int   epHelperPlays, epVoluntaryContests;   // 에피소드 통계
+    private int   epCommTokensUsed;           // 에피소드당 통신 토큰 사용한 플레이어 수
+    private bool  epCommRevealInWinningTrick; // 공개 카드가 task 완수 트릭에 포함됐는가
 
     // 드래프트 풀 상한 = 선택 액션(Branch[0]) 크기. task 개수는 이 값 이하로 제한.
     public const int MaxPoolSize = 10;
@@ -130,6 +132,8 @@ public class MissionManager : MonoBehaviour
         var ep = Academy.Instance.EnvironmentParameters;
         scriptedHelpers = ep.GetWithDefault("scripted_helpers", 0f) > 0.5f;
         epHelperPlays = epVoluntaryContests = 0;
+        epCommTokensUsed = 0;
+        epCommRevealInWinningTrick = false;
         RuleBasedHelper.ResetEpisodeStats();
 
         // 태스크 개수 결정
@@ -577,8 +581,25 @@ public class MissionManager : MonoBehaviour
 
             if (trickCards.Contains(task.targetCard))
             {
-                if (winner == task.assignedTo) TryCompleteTask(task, snapCompleted, completingNow);
-                else                           FailTask(task);
+                if (winner == task.assignedTo)
+                {
+                    // 통신 공개 카드가 이 완수 트릭에 포함됐는지 추적 (N≥1 공통)
+                    if (!epCommRevealInWinningTrick)
+                    {
+                        var cm = GameManager.Instance.communicationManager;
+                        if (cm != null)
+                            foreach (var p in GameManager.Instance.players)
+                            {
+                                var ct = cm.GetCommToken(p);
+                                if (ct != null && ct.isUsed && ct.revealedCard != null
+                                    && trickCards.Contains(ct.revealedCard))
+                                { epCommRevealInWinningTrick = true; break; }
+                            }
+                    }
+                    TryCompleteTask(task, snapCompleted, completingNow);
+                }
+                else
+                    FailTask(task);
             }
         }
         if (missionEnded) return;
@@ -678,6 +699,32 @@ public class MissionManager : MonoBehaviour
                    taskSuccess ? 1f : 0f);
             if (epHelperPlays > 0)
                 sr.Add("coop/voluntary_contest_rate", (float)epVoluntaryContests / epHelperPlays);
+
+            // 통신 토큰 메트릭 (N≥1 전체 호환)
+            //   comm_used_rate               : 에피소드당 통신한 플레이어 수 / 총 플레이어 수
+            //   assignee_communicated        : task 담당자 중 누군가가 통신했는가 (0/1)
+            //   comm_reveal_in_winning_trick : 공개 카드가 task 완수 트릭에 포함됐는가 (0/1)
+            {
+                var cm = GameManager.Instance.communicationManager;
+                if (cm != null)
+                {
+                    var players = GameManager.Instance.players;
+                    int used = 0;
+                    bool anyAssigneeComm = false;
+                    foreach (var p in players)
+                    {
+                        var ct = cm.GetCommToken(p);
+                        if (ct == null || !ct.isUsed) continue;
+                        used++;
+                        foreach (var task in tasks)
+                            if (task.assignedTo == p) { anyAssigneeComm = true; break; }
+                    }
+                    epCommTokensUsed = used;
+                    sr.Add("coop/comm_used_rate",               used / (float)players.Count);
+                    sr.Add("coop/assignee_communicated",         anyAssigneeComm ? 1f : 0f);
+                    sr.Add("coop/comm_reveal_in_winning_trick",  epCommRevealInWinningTrick ? 1f : 0f);
+                }
+            }
 
             // 도우미 action 분포 — 의도대로 작동했는지 정량 검증
             if (RuleBasedHelper.CountTotal > 0)

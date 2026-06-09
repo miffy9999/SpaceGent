@@ -23,7 +23,8 @@
   1. **task 드래프트(선택)**: 사령관(로켓4)부터 시계방향. 매 차례 가져가기/패스.
      - 패스 규칙: 남은 task `T` < 라운드 잔여 인원 `R(=N-cursor%N)`일 때만 패스. `T>=R`이면 강제 선택 → 모든 task 배정 보장.
   2. **트릭테이킹**: follow-suit 강제, 로켓 우선, 최고 트럼프 승리. 트릭 승자가 다음 선.
-- **보상 (MA-POCA 그룹)**: task 완수 +1 / task 실패 -1(즉시 종료). 에피소드 그룹 리턴 ≈ (완수 수) − (실패 시 1).
+- **보상 (MA-POCA 그룹)**: ~~task 완수 +1~~ / task 실패 -1(즉시 종료). **Run7~ 완수 보상 정규화 `+1/N`** (전부 완수 +1.0, 실패 시 `k/N−1`). 드래프트 shaping은 Run6~ 제거(없음).
+  - **리턴 해석 공식**: `평균리턴 = (평균 task완수율) − (미션실패확률)`. **N=1**이면 `리턴 = 2·성공률 − 1` (예: −0.5=25%(랜덤)/−0.24=38%/0.0=50%/+0.087=54%천장).
 - **학습에서 제외/미사용**:
   - **조난신호**: AI/배치 모드에서 스킵 (인간 UI 전용).
   - **순서 토큰**: enforce·관측 준비됨, `enable_order_tokens=0`이라 미부여(현재 학습엔 없음).
@@ -154,9 +155,86 @@
   - shaping(B)이 역효과였음: 로켓4 보유 → OwnerScore 높음 → 사령관 take 시 +보상 → 균형 강화.
   - value function이 "비사령관이 owner일 때 어떻게 되는지" 경험이 전무 → ε-greedy로 owner 분포를 50/25/12.5/12.5로 강제 다양화, value function이 "타깃 카드 보유자가 owner = 성공률 높음"을 학습하도록 유도.
   - 통신도 task 수트 외 정보 공개는 의미 없으므로 task 수트 중심으로 재설계, 포지션 선택까지 학습에 포함.
-- **결과 분석**: _(학습 종료 후 작성)_
-  - 확인 포인트: cursor 분포 50/25/12/12 수렴 여부 (ε 오버라이드 작동 검증) / ε=0 구간(80%~)에서 사령관 패스+타깃 보유자 take 패턴 출현 / assignee_success 38%→~55%? / Lesson 0→1 진급?
-  - 분석 도구: `Result/logs_analysis/analyze_logs.py build_vector313_draftE`
+- **결과 분석** (총 20M — 원본 9.46M + resume 10.54M):
+
+  **(1) 원본 9.46M: 유효한 학습 확인**
+  - **Lesson 0 고정**. Group Reward -0.490 → **-0.374**(end 10%). Entropy 0.997 → 0.336(수렴).
+  - 구간별: ε=1.0 구간 asuc ≈25%, **ε=0 시작(8M) 이후 28.9% → 31.4%**(기울기 유지). cursor 분포 개선 ✓.
+  - **cursor 분포**: draftB 64/9/18/9% → **draftE 51/15/20/14%** (사령관 독점 해소 ✓)
+  - coop: assignee_success 25.5% → **31.4%** / success_by_assignee 26.0% → **33.4%**
+
+  **(2) Resume 20M: `trainer_config_draftE_resume.yaml` 설계 결함으로 붕괴**
+
+  | 구간 | N (lesson) | asuc | group_reward | entropy |
+  |---|---|---|---|---|
+  | 8~10M | N=1 (ε=0) | **33.9%** | **-0.321** | 0.610 |
+  | 10~12M | **N=2** ← 붕괴 | 20.1% | -0.616 | 0.511 |
+  | 12~16M | N=2→3→4 | 18.3% | -0.615 | 0.354 |
+  | 18~20M | N=4 | 15.3% | -0.664 | 0.171 |
+
+  - **원인**: draftE_resume.yaml에 `num_tasks: curriculum(threshold 0.30/0.55/0.78)`이 포함됨. max_steps=20M에서 resume 시점(9.46M)의 progress = 0.473 > 0.30 → 10.01M에 N=2 전환, 11M에 N=3, 15.6M에 N=4. **Run7-A와 동일한 패턴으로 정책 붕괴.**
+  - SIGTERM(kill -15) 재시작은 무관 — 체크포인트 정상 복원됨. B가 깨끗하게 이어진 게 증거.
+  - **수정**: `trainer_config_draftE_resume.yaml`에서 `num_tasks: curriculum` → `num_tasks: 1`(고정)으로 교체 완료.
+  - 20M 데이터 자체는 N 혼입으로 더 이상 N=1 순수 학습 결과를 보여주지 않음. **유효한 데이터는 원본 9.46M 및 10M 직전까지.**
+  - **draftE의 N=1 착취 구간 최고점**: 10M 직전 **asuc 33.9%, group_reward -0.321** (2M 평균, ε=0 구간 2M 기준).
+
+## Run 6.5 — `build_vector313_draftE2`
+
+- **시작**: 2026-06-04 · 빌드 재사용(draftE 동일 빌드, C# 변경 없음) · `config/trainer_config_draftE2.yaml` 신규
+- **빌드 상태**: 관측 313·액션 [10,2,4]·C# 코드 모두 draftE와 동일. YAML만 변경.
+- **실행**: `mlagents-learn config/trainer_config_draftE2.yaml --env=<draftE빌드> --run-id=build_vector313_draftE2`
+- **목적 (왜)**: draftE(9.46M) ε=0 착취 구간이 1.46M뿐 → asuc 33.9%에서 기울기 유지한 채 중단. 55% 천장 도달 가능성이 미확인. resume 시도했으나 `trainer_config_draftE_resume.yaml`에 `num_tasks: curriculum`이 잔존해 10.01M에 N=2 강제 전환 → 정책 붕괴. 체크포인트도 18.5M부터밖에 없어 롤백 불가.
+  - **교훈**: resume YAML에 `measure: progress` 커리큘럼을 남기면, max_steps 변경 시 progress 재계산으로 의도치 않은 N 전환 발생. **resume config는 모든 env 파라미터를 고정값으로 교체하거나, curriculum 구조 유지 시 값만 0/고정으로 덮어쓸 것.**
+  - 동일 빌드로 새 run-id 사용 → draftE 오염 데이터와 완전 분리. ε 탐색 구간은 원본과 동일(5M/8M 절대 step), 착취는 8M→20M = **12M** 확보.
+- **결과 분석**: (진행 중 — 완료 후 작성)
+
+| 구간 | ε | group_reward | asuc | success_by_assignee | entropy |
+|---|---|---|---|---|---|
+| 2M | 1.0 | — | — | — | — |
+| 5M | 1.0→0.5 | — | — | — | — |
+| 8M | 0.5→**0.0** | — | — | — | — |
+| 14M | 0.0 | — | — | — | — |
+| **20M** | **0.0** | — | — | — | — |
+
+**기대 지표**: ε=0 착취 12M 기준, asuc ≥ 38%(baseline 초과) → 55% 천장 근접 여부 확인.
+
+---
+
+## Run 6.7 — `build_vector313_commE`
+
+- **시작**: 2026-06-04 · C# 신규 빌드 필요 · `config/trainer_config_commE.yaml` 신규
+- **빌드 상태**: 관측 313·액션 [10,2,4] 불변. **C# 2곳 변경 (MissionManager + CrewAgent).**
+  1. **통신 메트릭 3종** (`MissionManager.cs`) — 에피소드 종료 시 TensorBoard 송출:
+     - `coop/comm_used_rate`: 통신한 플레이어 수 / 총 플레이어 수 (0=전혀 안 씀, 1=전원 사용)
+     - `coop/assignee_communicated`: task 담당자 중 누군가가 통신했는가 (0/1)
+     - `coop/comm_reveal_in_winning_trick`: 공개 카드가 task 완수 트릭에 포함됐는가 (0/1)
+  2. **ε-greedy 통신 강제** (`CrewAgent.cs`) — env param `comm_explore_eps`. `canComm=true` + 에이전트가 스킵 선택 시 확률 ε으로 강제 사용. Branch2(포지션)는 정책 유지.
+- **실행**: `mlagents-learn config/trainer_config_commE.yaml --env=<commE빌드> --run-id=build_vector313_commE`
+- **목적 (왜)**: run7_B 20M에서 `voluntary_contest_rate`(헬퍼 행동 지표)가 완전 flat, `success_by_helper`(23.9%)와 `success_by_assignee`(35.6%) 갭이 12M 착취에도 안 좁혀짐 → 통신이 팀 조율에 기여 못 하는 것으로 추정. 그러나 기존 코드에 통신 전용 메트릭이 없어서 "못 쓰는건지 안 쓰는건지" 분리 불가. 드래프트 ε-greedy와 동일한 논리: 에이전트가 자발적으로 안 쓰면 강제로 경험 생성 → value function이 "통신 → 팀 반응 → 성공" 학습.
+  - **대조군**: draftE2 (draft ε만, comm ε 없음) — 동시 진행 중.
+- **ε 스케줄**:
+  | 구간 | draft ε | comm ε | 의미 |
+  |---|---|---|---|
+  | 0→5M | 1.0 | 1.0 | 둘 다 탐색 |
+  | 5→8M | 0.5 | 1.0 | draft 수렴 중, comm 계속 강제 |
+  | 8→14M | **0.0** | 0.5 | draft 착취, comm 반강제 |
+  | 14→20M | 0.0 | **0.0** | 순수 정책 — comm 자발적 채택 여부 확인 (6M) |
+- **결과 분석**: (진행 중 — 완료 후 작성)
+
+  | 구간 | comm ε | comm_used | assignee_comm | reveal_in_trick | asuc | helper |
+  |---|---|---|---|---|---|---|
+  | 5M | 1.0 | — | — | — | — | — |
+  | 8M | 1.0→0.5 | — | — | — | — | — |
+  | 14M | 0.5→**0.0** | — | — | — | — | — |
+  | **20M** | **0.0** | — | — | — | — | — |
+
+  **핵심 관찰 포인트**:
+  - `comm_used_rate` ≫ 0 → 메트릭 정상 작동 확인
+  - `comm_reveal_in_winning_trick` 상승 → 공개 카드가 실제 완수에 기여하기 시작
+  - `success_by_helper` 상승 → 팀원이 통신 정보를 활용해 지원
+  - 14M 이후(ε=0 구간) `comm_used_rate` 유지 → 자발적 통신 학습 성공
+
+---
 
 ## Run 7 — 멀티-task 정규화 + 두 전략 병렬 (A: 커리큘럼 / B: 혼합)
 
@@ -178,10 +256,62 @@
     정규화로 "N↑→리턴↑" 병리는 해소(이제 단조 감소)됐으나, N≥2 천장이 음수 + ε이 리턴을 더 끌어내려 **양수 reward threshold는 도달 불가** 확정.
     → Option A는 `progress` 기반 진급으로 전환(커리큘럼 정지 방지). Option B는 커리큘럼 자체를 제거하고 혼합 N으로 일반 정책 직접 학습.
   - coop 휴리스틱은 N≥2 조율이 약해 위 천장을 **과소평가** → 팀원 MCTS 천장이 실제 상한. 확정되면 A의 N≥2 단계를 reward+음수threshold로 되돌릴 수 있음.
-- **결과 분석**: _(학습 종료 후 작성)_
-  - 확인 포인트: A/B 모두 N별 미션 성공률 추이 / 통신 토큰 사용률이 N↑에서 유의미하게 증가하는가 /
-    A의 progress 진급이 ε 스케줄과 어긋나지 않는가 / B가 N=1 특화 편향 없이 전 N에서 균형 잡힌 성능을 내는가.
-  - 분석 도구: `Result/logs_analysis/analyze_logs.py <run-id>`
+- **결과 분석** (`build_run7_A` / `build_run7_B` 각 10M 완료):
+
+  **⚠️ 핵심 전제**: ε 커리큘럼(progress 0→50% ε=1.0, 50→80% ε=0.5, 80→100% ε=0.0)이 두 run 공통. N별 착취 구간이 실제로 얼마나 확보됐는지가 성패를 가른다.
+
+  **(1) Run7-A (`build_run7_A`, 커리큘럼, 10M 완료):** num_tasks 커리큘럼 전환 실측:
+  - N=1: 0→3M / N=2: 3→5.5M / N=3: 5.5→7.8M / N=4: 7.8→10M
+  - ε 전환: ε=1.0 0→6M / ε=0.5 6→9M / ε=0.0 9→10M
+
+  | 구간 | N | ε | group_reward | asuc | entropy |
+  |---|---|---|---|---|---|
+  | 0→3M | 1 | 1.0 | -0.50 | 25.2% | 1.69 |
+  | 3→5.5M | 2 | 1.0→0.5 | -0.82 | 18.1% | 1.13 |
+  | 5.5→7.8M | 3 | 0.5→0.0 | -0.96 | 14.9% | 1.49↑ |
+  | 7.8→10M | 4 | 0.0 | -1.03 | **14.3%** | **1.53** |
+
+  - **N=1 착취 구간 = 0**: ε=1.0이 5M까지 유지되는데 N=1은 3M에서 끝남 → N=1은 **전 구간이 강제 랜덤 드래프트**. "N=1 먼저 잘 배운다"는 전제가 데이터로 붕괴.
+  - Entropy 1.53으로 **미수렴** — N이 계속 바뀌어 정책이 한 번도 안정되지 못함. N=3 진입 시 오히려 상승.
+  - **설계 실패 확정**: ε과 N 커리큘럼 타이밍이 완전히 어긋남. A 재설계 없이 재실행은 무의미.
+
+  **(2) Run7-B (`build_run7_B`, 혼합 N, 20M 완료):** mix_tasks=1로 N=1:40%/2:35%/3:15%/4:10% 전 구간 적용. ε 전환: ε=1.0(0~5M) → ε=0.5(5~8M) → **ε=0.0(8M~20M, 착취 12M 확보)**. `trainer_config_B_resume.yaml` 설계 정상(`num_tasks: 1` 고정 → N 혼입 없음).
+
+  | 구간 | ε | group_reward | asuc | success_by_assignee | entropy |
+  |---|---|---|---|---|---|
+  | 2M | 1.0 | -0.740 | 19.5% | 21.9% | 1.611 |
+  | 6M | 0.5 | -0.724 | 20.6% | 24.3% | 1.095 |
+  | 8M | 0.5→0 | -0.685 | 22.8% | 29.2% | 0.876 |
+  | 10M | 0.0 | -0.607 | 27.5% | 36.8% | 0.709 |
+  | 12M | 0.0 | -0.601 | 27.9% | 34.7% | 0.872↑ |
+  | 16M | 0.0 | -0.594 | 28.2% | 34.5% | 1.034↑ |
+  | 18M | 0.0 | -0.581 | 29.0% | 36.7% | 0.923 |
+  | **20M** | **0.0** | **-0.583** | **28.9%** | **35.9%** | **0.866** |
+
+  - **8M 이후 상승, 10M 이후 plateau**: success_by_assignee 10M 36.8% → 이후 34~37% 범위에서 진동. asuc도 28~29%에서 안정.
+  - **entropy 역행(10M→0.709, 16M→1.034, 20M→0.866)**: resume 직후 일시적 상승(policy 재탐색 가능성) 후 재하강. 완전 수렴엔 미도달.
+  - **group_reward -0.58~-0.60 유지**: 수학적 기대치 범위(N 혼합 구조). 학습 불량 아님.
+  - **success_by_assignee 피크 36~37%**: draftE의 33.4%(9.46M) 및 33.9%(10M 직전) 초과. 혼합 N 노출 효과.
+  - 20M에서도 entropy 0.87 → 아직 완전 수렴 전, 하지만 추가 착취 대비 한계점 접근.
+
+  **A vs B 최종 비교**:
+  | 지표 | draftE 유효(10M 직전) | run7_A(10M) | run7_B(20M) |
+  |---|---|---|---|
+  | group_reward(말기) | -0.321 | -1.025 | **-0.583**† |
+  | asuc(말기) | **33.9%** | 14.3%↓ | 28.9% |
+  | success_by_assignee | **33.9%** | 18.6% | 35.9%‡ |
+  | entropy(말기) | 0.610 | 1.534(미수렴) | 0.866 |
+  | ε=0 착취 기간 | 2M | 1M(@N=4) | **12M** |
+
+  †B의 -0.583은 N 혼합 기대치 (N=1 전용 draftE와 직접 비교 불가)
+  ‡B의 success_by_assignee는 혼합 N 기준. 단일 task 완수율 측면에서 draftE 초과.
+
+  **결론**:
+  - **A 실패 확정**: ε↘ 전 N 증가로 착취 구간 없음. 설계 근본 재검토 필요.
+  - **B 수렴 근접**: 12M 착취 후 plateau. success_by_assignee ~36% 유지, entropy 미수렴(0.87). 추가 착취 대비 한계점. draftE 대비 N=1 성능은 비교 불가하지만 개별 task 완수율은 초과.
+  - **배운 점**: resume 시 `num_tasks: curriculum`은 반드시 `num_tasks: 1`(고정)으로 교체 필요 — progress 재계산으로 N이 강제 전환됨.
+  - 보상 정규화·N관측·혼합샘플링 모두 설계대로 정상 작동 확인.
+  - 분석 도구: `summarize_csv.py`(CSV 추세) · `parse_multitask.py <run>`(N별 성공률) · `analyze_logs.py`(cursor 분포)
 
 ---
 
@@ -225,12 +355,21 @@
 
 > 위 회차 결과를 보고 하나 골라 학습 → 새 Run으로 승격(목적·결과 작성) → 이 목록 갱신. 상세 근거: [`ceiling.md`](ceiling.md) §7
 >
-> **현재 상황**: E(Run6) 빌드·실행 대기. 멀티-task 정규화 2전략(Run7 A/B) 빌드 대기.
+> **현재 상황**: draftE2(N=1 draft ε, 진행 중) + commE(draft ε + comm ε, 진행 중) 병렬 실행.
+> draftE2 = 대조군(통신 없음), commE = 실험군(통신 강제 포함). 둘 다 20M 목표.
 
-- **(E) 드래프트 ε-greedy 탐색** ← **Run6 `build_vector313_draftE`로 승격(빌드 대기)**
-- **(G) 멀티-task 정규화 + 2전략 병렬** ← **Run7로 승격(빌드 대기)**. 완수 +1/N, N관측[20], Option A(progress 커리큘럼)/B(혼합 N).
-- ~~**(F) 멀티-task shaping 스케일링(1/N)**~~ → 종단 보상 정규화(완수 +1/N)로 대체·해결(Run7). shaping 자체는 Run5에서 기각됨.
-- **(보류) (A) 보상 이진화** — *왜 보류*: `/N` 정규화로 measure 비단조 문제는 해소(N↑→리턴↓ 단조)되어 당장 불필요. N≥2 천장이 음수라 reward-threshold 대신 progress 진급 사용. MCTS 천장 확정 후 reward+음수threshold로 복귀 검토.
-- **(장기) 드래프트 단계 정보공유/통신** — *왜*: 부분관측 천장 55% → 완전정보 92% 갭은 *정보* 문제. 드래프트 전 정보 공유 수단이 있어야 55% 너머로 감(현재 통신은 플레이 중에만 가능).
-- ~~**(B) 드래프트 shaping**~~ → Run5에서 기각. shaping 신호가 있어도 탐색 없으면 효과 없음.
+- ~~**(J) draftE N=1 순수 착취 재시도**~~ → `build_vector313_draftE2`로 fresh start 실행 중(20M, draft ε만).
+
+- **(K) 통신 ε-greedy + draft ε 동시** ← **실행 중(`build_vector313_commE`)**. *왜*: run7_B 20M에서 통신 전용 메트릭 없어 미확인. 신규 메트릭 3종(comm_used_rate, assignee_communicated, comm_reveal_in_winning_trick) 추가. draft ε(draftE2와 동일) + comm ε(8M까지 1.0, 14M까지 0.5, 이후 0.0). 대조군 draftE2와 비교해 통신 강제의 효과 측정.
+
+- ~~**(I) Run7-B resume + ε=0 고정**~~ → 실행 완료(20M). success_by_assignee ~36%, plateau. 추가 착취 대비 한계점 도달.
+
+- **(H) ε 스케줄 ↔ 커리큘럼 정합 재설계** ← A 완전 재설계 필요 시. Run7-A에서 ε과 N 커리큘럼 타이밍 불일치로 붕괴. 해법: ε을 N=1 단계 안에서 1.0→0 완료 후 N 진급.
+
+- ~~**(E) 드래프트 ε-greedy 탐색**~~ → Run6/draftE 실행됨. ε=0 도달 후 asuc 0.25→0.33 상승(유효 신호). (I)로 이어짐.
+- ~~**(G) 멀티-task 정규화 + 2전략 병렬**~~ → Run7 실행됨. 정규화/N관측/혼합샘플링 정상 작동 확인. A 실패/B 유망 확정.
+- ~~**(F) 멀티-task shaping 스케일링(1/N)**~~ → 종단 보상 정규화(완수 +1/N)로 대체·해결(Run7).
+- **(보류) (A) 보상 이진화** — `/N` 정규화로 measure 비단조 해소. MCTS 천장 확정 후 reward+음수threshold로 복귀 검토.
+- **(장기) 드래프트 단계 정보공유/통신** — 부분관측 천장 55% → 완전정보 92% 갭 해소용. 현재 통신은 플레이 중에만 가능.
+- ~~**(B) 드래프트 shaping**~~ → Run5에서 기각.
 - ~~**(D) shaping anneal**~~ → B 실패로 불필요.

@@ -1,0 +1,75 @@
+behaviors:
+  CrewAgent:
+    # MA-POCA: 4명을 한 팀으로 묶어 group reward + 중앙집중 critic으로 협력 학습.
+    #   GameManager가 helperHeuristicOnly가 아니면 SimpleMultiAgentGroup에 4명 등록.
+    #   (씬: 4명 모두 BehaviorType=Default)
+    trainer_type: poca
+    hyperparameters:
+      batch_size: 256
+      buffer_size: 4096
+      learning_rate: 3.0e-4
+      beta: 0.01          # 엔트로피 계수 (협동게임은 탐색 중요)
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3
+      learning_rate_schedule: linear
+    network_settings:
+      normalize: false
+      hidden_units: 256
+      num_layers: 3
+      vis_encode_type: simple
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+    max_steps: 20000000   # build_vector313_draftE(9.46M) --resume → 추가 10.54M 착취(ε=0 고정)
+    time_horizon: 128
+    summary_freq: 10000
+    keep_checkpoints: 5
+
+# ──────────────────────────────────────────────
+# draftE_resume — build_vector313_draftE 체크포인트 이어받기 전용 설정
+#
+# 배경:
+#   build_vector313_draftE(Run6)가 9.46M에서 중단됐을 때 ε=0 구간(8M~)이 1.46M뿐.
+#   asuc 28.9%(8M) → 31.4%(9.46M)로 상승 중이었고 아직 수렴 전.
+#   ε-greedy 탐색(0~8M)이 cursor 분포를 64%→51%로 다양화하고 value function을 훈련시킨
+#   상태에서, 이제 ε=0 순수 착취(exploitation)로 드래프트 전략 최적화 단계.
+#
+# 실행:
+#   mlagents-learn config/trainer_config_draftE_resume.yaml \
+#     --env=<draftE빌드> --run-id=build_vector313_draftE --resume
+#
+# 주의:
+#   - num_tasks 커리큘럼은 trainer_config.yaml(Option A)과 동일하게 유지.
+#     --resume 시 커리큘럼 lesson은 저장된 체크포인트 상태를 이어받음(N=1 고정 유지).
+#   - draft_explore_eps: 0.0 고정. curriculum 사용 시 max_steps가 늘어나면
+#     progress가 재계산되어 ε이 다시 올라가는 문제 방지.
+# ──────────────────────────────────────────────
+environment_parameters:
+  # ※ 버그 수정: 원래 여기에 num_tasks curriculum(threshold 0.30/0.55/0.78)이 있었음.
+  #   resume 시 progress=9.46M/20M=0.473 > 0.30 → 즉시 N=2 전환 → Run7-A와 동일한 붕괴.
+  #   draftE는 N=1 전용 run이므로 고정값으로 교체.
+  num_tasks: 1
+
+  # ε=0 고정: --resume 착취 전용.
+  #   체크포인트에 lesson_num=2(Eps_Zero)가 저장돼 있으므로 3단계 구조는 유지,
+  #   값만 모두 0.0으로 교체. 구조를 없애면 curriculum[2] IndexError 발생.
+  draft_explore_eps:
+    curriculum:
+      - name: Eps_Full
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.5
+          min_lesson_length: 10
+        value: 0.0
+      - name: Eps_Half
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.8
+          min_lesson_length: 10
+        value: 0.0
+      - name: Eps_Zero
+        value: 0.0

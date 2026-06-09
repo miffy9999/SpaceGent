@@ -1,0 +1,82 @@
+behaviors:
+  CrewAgent:
+    trainer_type: poca
+    hyperparameters:
+      batch_size: 256
+      buffer_size: 4096
+      learning_rate: 3.0e-4
+      beta: 0.01
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3
+      learning_rate_schedule: linear
+    network_settings:
+      normalize: false
+      hidden_units: 256
+      num_layers: 3
+      vis_encode_type: simple
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+    max_steps: 20000000
+    time_horizon: 128
+    summary_freq: 10000
+    keep_checkpoints: 5
+
+# ══════════════════════════════════════════════
+# run7_B_repeat — 혼합 N(mix_tasks) 실험의 시드 반복용 설정
+#
+# 무엇:
+#   build_run7_B(혼합 N, 최종 20M)를 "그대로" 재현하는 설정.
+#   멀티시드(평균±표준편차)로 신뢰구간을 얻기 위해, 동일 설정을 --seed만 바꿔 N회 실행.
+#
+#   ※ 원본 run7_B는 10M(trainer_config_B.yaml) → --resume 20M(trainer_config_B_resume.yaml)
+#     2단계였음. 여기서는 동일한 "유효 스케줄"을 단발 20M으로 재현한다(resume 버그류 회피):
+#       원본 유효 ε: 1.0[0,5M] / 0.5[5M,8M] / 0[8M,20M]
+#       = 본 설정 threshold 0.25(5M)/0.40(8M) → 완전히 동일.
+#
+# 어디서:
+#   commE 빌드에서 실행(superset). commE = run7 빌드 + (comm 메트릭 로깅 + comm_explore_eps).
+#   comm_explore_eps=0이면 둘 다 inert → 원본 run7_B와 행동 동일(완전 충실).
+#
+# draftE_repeat와의 관계:
+#   유일한 차이는 mix_tasks (여기=1 / draftE_repeat=0). 나머지(ε 스케줄·하이퍼파라미터·20M)
+#   전부 동일 → 두 실험이 깨끗한 대조쌍.
+#
+# mix_tasks=1 동작:
+#   에피소드마다 N을 가중 샘플링(N=1:40% / 2:35% / 3:15% / 4:10%), num_tasks 무시.
+#   보상은 정규화(완수 +1/N) → group_reward는 N 혼합 구조상 수학적 기대치(-0.58~-0.60).
+#   ※ 핵심 지표는 group_reward가 아니라 coop/success_by_assignee(개별 task 완수율).
+#
+# 실행 (시드 4개 예시; --seed·--run-id·--base-port를 매번 다르게):
+#   mlagents-learn config/trainer_config_run7_B_repeat.yaml --env=<commE빌드> \
+#     --run-id=run7_B_repeat_s1 --seed 1 --base-port 5025
+#   ... --run-id=run7_B_repeat_s2 --seed 2 --base-port 5030
+#   ... --run-id=run7_B_repeat_s3 --seed 3 --base-port 5035
+#   ... --run-id=run7_B_repeat_s4 --seed 4 --base-port 5040
+#   ※ run 종료 후 results/<run-id>/ 폴더 전체(.onnx + .pt + configuration.yaml) 보관.
+# ══════════════════════════════════════════════
+environment_parameters:
+  mix_tasks: 1     # 혼합 N 샘플링 ON (num_tasks 무시) — draftE_repeat와의 유일한 차이
+  num_tasks: 1     # mix_tasks=1이면 무시됨 (안전 기본값)
+  comm_explore_eps: 0.0   # 통신 강제 OFF (명시) — 원본 run7_B와 동일
+
+  draft_explore_eps:
+    curriculum:
+      - name: Eps_Full
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.25   # 5M/20M
+          min_lesson_length: 10
+        value: 1.0
+      - name: Eps_Half
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.40   # 8M/20M
+          min_lesson_length: 10
+        value: 0.5
+      - name: Eps_Zero
+        value: 0.0          # 8M→20M ε=0 착취 (12M)

@@ -1,0 +1,69 @@
+behaviors:
+  CrewAgent:
+    trainer_type: poca
+    hyperparameters:
+      batch_size: 256
+      buffer_size: 4096
+      learning_rate: 3.0e-4
+      beta: 0.01
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3
+      learning_rate_schedule: linear
+    network_settings:
+      normalize: false
+      hidden_units: 256
+      num_layers: 3
+      vis_encode_type: simple
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+    max_steps: 20000000   # N=1 드래프트 학습 가능성 체크 — 착취 12M 확보
+    time_horizon: 128
+    summary_freq: 10000
+    keep_checkpoints: 5
+
+# ──────────────────────────────────────────────
+# draftE2 — N=1 드래프트 착취 검증 (fresh start, 20M)
+#
+# 목적:
+#   build_vector313_draftE(원본 9.46M) 결과 → ε=0 착취 1.46M만에 asuc 31.4%→33.9%,
+#   기울기 미꺾임. 착취 budget 부족이 병목. 55% 천장 도달 가능성 확인 필요.
+#   resume YAML 결함(num_tasks curriculum 잔존 → N=2 강제 전환)으로 원본 오염.
+#   → 동일 빌드(draftE)로 새 run-id, max_steps 20M, 착취 12M 확보.
+#
+# ε 스케줄 (원본 draftE와 동일 절대 step, 비율만 조정):
+#   0→5M  (progress 0→0.25): ε=1.0 — cursor 분포 다양화 (원본과 동일)
+#   5→8M  (progress 0.25→0.40): ε=0.5 — 점진 감쇠 (원본과 동일)
+#   8→20M (progress 0.40→1.0):  ε=0.0 — 순수 착취 12M (원본 1.46M → 8배)
+#
+# 버그 교훈:
+#   num_tasks: curriculum(threshold 0.30/0.55/0.78)을 resume에 남기면
+#   progress 재계산으로 N=2 강제 전환됨. 이 파일은 num_tasks: 1 고정.
+#
+# 실행:
+#   mlagents-learn config/trainer_config_draftE2.yaml \
+#     --env=<draftE빌드경로> --run-id=build_vector313_draftE2
+# ──────────────────────────────────────────────
+environment_parameters:
+  num_tasks: 1   # N=1 고정. curriculum 사용 금지 (progress 기반 N 전환 방지)
+
+  draft_explore_eps:
+    curriculum:
+      - name: Eps_Full
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.25   # 5M/20M = 0.25 → 5M까지 ε=1.0 (원본과 동일)
+          min_lesson_length: 10
+        value: 1.0
+      - name: Eps_Half
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.40   # 8M/20M = 0.40 → 8M까지 ε=0.5 (원본과 동일)
+          min_lesson_length: 10
+        value: 0.5
+      - name: Eps_Zero
+        value: 0.0          # 8M→20M ε=0 착취 (12M)

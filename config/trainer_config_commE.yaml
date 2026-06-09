@@ -1,0 +1,101 @@
+behaviors:
+  CrewAgent:
+    trainer_type: poca
+    hyperparameters:
+      batch_size: 256
+      buffer_size: 4096
+      learning_rate: 3.0e-4
+      beta: 0.01
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3
+      learning_rate_schedule: linear
+    network_settings:
+      normalize: false
+      hidden_units: 256
+      num_layers: 3
+      vis_encode_type: simple
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+    max_steps: 20000000
+    time_horizon: 128
+    summary_freq: 10000
+    keep_checkpoints: 5
+
+# ──────────────────────────────────────────────
+# commE — 드래프트 ε + 통신 ε 동시 적용 (N=1, 20M)
+#
+# 목적:
+#   run7_B에서 voluntary_contest_rate(통신 대리지표)가 20M 동안 완전 flat.
+#   comm_used_rate / assignee_communicated / comm_reveal_in_winning_trick 메트릭
+#   신규 추가(이 빌드부터 측정 시작). ε-greedy로 통신 경험을 강제 생성해
+#   value function이 "통신 → 팀 반응 → 미션 성공" 경로를 학습하도록 유도.
+#   draft ε은 draftE2와 동일 스케줄 유지(검증된 방식).
+#
+# ε 스케줄:
+#   구간        draft_ε  comm_ε  의미
+#   0→5M        1.0      1.0    draft+comm 둘 다 탐색
+#   5→8M        0.5      1.0    draft 수렴 중, comm 계속 강제
+#   8→14M       0.0      0.5    draft 착취 시작, comm 반강제
+#   14→20M      0.0      0.0    순수 정책 — comm이 자발적으로 남는지 확인 (6M)
+#
+# comm ε이 draft ε보다 늦게 꺼지는 이유:
+#   draft 착취 구간(8M~)에서도 comm을 계속 강제해
+#   "최적 draft + 통신 = 성공" 경험을 충분히 쌓은 뒤,
+#   마지막 6M(14M~)에서 자발적 채택 여부를 관찰.
+#
+# 빌드: commE 신규 빌드 필요 (C# 변경: 통신 메트릭 3종 + comm_explore_eps 추가)
+#
+# 실행:
+#   mlagents-learn config/trainer_config_commE.yaml \
+#     --env=<commE빌드경로> --run-id=build_vector313_commE
+#
+# resume 시 주의:
+#   num_tasks: 1 고정 (curriculum 금지).
+#   draft_explore_eps lesson_num 보존: 3단계 구조 유지 + 모든 값 0.0으로 교체.
+#   comm_explore_eps도 동일하게 처리.
+# ──────────────────────────────────────────────
+environment_parameters:
+  num_tasks: 1   # N=1 고정 (curriculum 금지 — progress 기반 N 전환 방지)
+
+  # 드래프트 ε: draftE2와 동일 스케줄
+  draft_explore_eps:
+    curriculum:
+      - name: Draft_Full
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.25   # 5M/20M
+          min_lesson_length: 10
+        value: 1.0
+      - name: Draft_Half
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.40   # 8M/20M
+          min_lesson_length: 10
+        value: 0.5
+      - name: Draft_Zero
+        value: 0.0
+
+  # 통신 ε: draft보다 늦게 감쇠
+  comm_explore_eps:
+    curriculum:
+      - name: Comm_Full
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.40   # 8M/20M — draft가 꺼진 이후까지 1.0 유지
+          min_lesson_length: 10
+        value: 1.0
+      - name: Comm_Half
+        completion_criteria:
+          measure: progress
+          behavior: CrewAgent
+          threshold: 0.70   # 14M/20M
+          min_lesson_length: 10
+        value: 0.5
+      - name: Comm_Zero
+        value: 0.0
