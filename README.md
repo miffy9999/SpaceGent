@@ -240,6 +240,43 @@ tensorboard --logdir results/
 
 ---
 
+## MCTS 협력 AI
+
+### 알고리즘 개요
+
+**SO-ISMCTS** (Single-Observer Information Set MCTS, Cowling 2012) 기반으로 불완전 정보 협력 게임에 적합하게 설계.
+
+| 구성 요소 | 내용 |
+|-----------|------|
+| **탐색 트리** | 카드 키(suit×100+value) 공유 트리 — 결정화별 샘플이 동일 노드를 누적 |
+| **신념 결정화** | MCV+백트래킹 — void·통신 제약을 만족하는 손패 분포를 완전 탐색으로 생성 (fallback 0) |
+| **협력 롤아웃** | 목표 claim/양보 + 능동 feeding (owner가 동료 목표 무늬를 보장승리 카드로 리드 → 동료 release) |
+| **탐색 파라미터** | C=0.7 (스윕 정점: 0.4=32.6%, **0.7=39.8%**, 1.0=33.5%), budget=1000 (이후 평탄) |
+| **재결정화** | K=5 per iteration (pool 재사용 시 strategy fusion 발생 → 매 반복 재샘플링) |
+
+### 벤치마크 (협력 2-task, cooperativeTargets=ON, 800 에피소드)
+
+| 정책 | 미션 성공률 | 평균 태스크 완수율 |
+|------|-------------|------------------|
+| **MCTS** (SO-ISMCTS) | **34.6 %** | **49.9 %** |
+| RuleBased (HFSM) | 6.7 % | 19.0 % |
+| **배율** | **5.2×** | **2.6×** |
+
+> **cooperativeTargets=ON**: 타깃 카드를 전체 덱에서 무작위 배정 → 동료가 타깃 보유 → 실질적인 협력이 필요한 시나리오. MCTS 본령이며 헤드룸이 큼.
+
+### GameManager 평가 설정
+
+| 필드 | 권장값 | 설명 |
+|------|--------|------|
+| `aiPolicy` | `MCTS` | MCTS 정책 사용 |
+| `cooperativeTargets` | `true` | 협력 필요 시나리오 활성화 |
+| `overrideNumTasks` | `2` | 태스크 수 고정 (2-task 표준 벤치마크) |
+| `mctsBudget` | `1000` | 시뮬레이션 예산 (이후 평탄) |
+| `mctsDeterminizations` | `10` | 결정화 수 |
+| `evaluationLogging` | `true` | EvalStats 콘솔 출력 |
+
+---
+
 ## Unity 씬 설정 [Unity 담당]
 
 ### Inspector 필수 연결 항목
