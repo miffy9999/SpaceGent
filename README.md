@@ -260,27 +260,3 @@ tensorboard --logdir results/
 `Project Settings > Player > Active Input Handling = Both`
 
 New Input System (`UnityEngine.InputSystem.Keyboard.current`) 기반으로 동작합니다.
-
----
-
-## MCP for Unity 설정 [선택사항]
-
-Unity Editor를 Claude Code로 직접 제어할 때 사용.
-
-`Window > MCP for Unity`에서 서버 시작 후 `.claude.json`에 설정:
-
-```json
-"mcpServers": {
-  "UnityMCP": {
-    "type": "http",
-    "url": "http://127.0.0.1:8080/mcp",
-    "headers": { "X-API-Key": "<EditorPrefs의 MCPForUnity.ApiKey 값>" }
-  }
-}
-```
-
-패키지 설치:
-```
-Window > Package Manager > + > Add package from git URL
-https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main
-```
